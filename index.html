@@ -7,7 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;min-height:100vh;font-size:14px}
+body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;min-height:100vh;font-size:14px;-webkit-text-size-adjust:100%}
 
 /* ── AUTH ── */
 .auth-wrap{min-height:100vh;display:flex;flex-direction:column}
@@ -22,7 +22,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
 .auth-sub{font-size:13px;color:#6b7280;margin-bottom:24px;line-height:1.5}
 .field{margin-bottom:14px}
 .field label{display:block;font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
-.field input,.field select{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;color:#111827;background:#fff;outline:none;transition:border-color .15s,box-shadow .15s}
+.field input,.field select{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;color:#111827;background:#fff;outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none;appearance:none}
 .field input:focus,.field select:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.1)}
 .field input.err,.field select.err{border-color:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.08)}
 .ferr{font-size:12px;color:#ef4444;font-weight:500;margin-top:5px;display:none;align-items:center;gap:4px}
@@ -152,6 +152,72 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
 .modal p{font-size:13px;color:#6b7280;margin-bottom:20px;line-height:1.5}
 .modal-btns{display:flex;gap:8px}
 .modal-btns button{flex:1;padding:10px;border:none;border-radius:9px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+
+/* ── MOBILE ── */
+@media(max-width:480px){
+  /* Auth card */
+  .auth-card{padding:24px 18px;border-radius:14px}
+  .auth-title{font-size:18px}
+  .auth-sub{font-size:12.5px}
+  .auth-tab{font-size:12.5px;padding:9px 6px}
+  .btn-submit{font-size:13.5px;padding:13px}
+  .field input,.field select{font-size:16px} /* Prevent zoom on iOS */
+
+  /* Nav */
+  .nav{flex-wrap:wrap;height:auto;padding:10px 12px;gap:8px}
+  .nav-logo{font-size:14px}
+  .nav-tabs{order:3;width:100%;gap:2px;overflow-x:auto;padding-bottom:2px}
+  .nav-tab{font-size:11.5px;padding:7px 10px;flex-shrink:0}
+  .nav-right{gap:8px}
+  .nav-user{display:none}
+  .nav-balance{font-size:12.5px}
+  .btn-logout{font-size:11.5px;padding:5px 10px}
+
+  /* Pages */
+  .page{padding:14px 12px}
+
+  /* Summary cards */
+  .summary-row{grid-template-columns:repeat(2,1fr);gap:8px}
+  .sum-card{padding:12px}
+  .sum-card-val{font-size:18px}
+  .sum-card-label{font-size:10px}
+
+  /* Category table */
+  .cat-table th,.cat-table td{padding:8px 6px}
+  .cat-name{font-size:12px}
+  .status-pill{font-size:10px;padding:2px 7px}
+  .amount-cell{font-size:12px}
+
+  /* Entries form */
+  .two-col{grid-template-columns:1fr}
+  .field input,.field select{font-size:16px;padding:12px}
+  .card-head{padding:12px 14px}
+  .card-body{padding:12px 14px}
+  .form-tab{font-size:12px;padding:8px}
+
+  /* Entry list items */
+  .entry{padding:10px 12px;gap:8px}
+  .ecat-icon{width:30px;height:30px;font-size:14px}
+  .ename{font-size:12.5px}
+  .esub{font-size:11px}
+  .eamt{font-size:13px}
+  .btn-icon{width:26px;height:26px;font-size:12px}
+
+  /* Budget setup */
+  .budget-grid{grid-template-columns:1fr 1fr}
+
+  /* Warnings */
+  .warn-banner{font-size:12.5px;padding:10px 12px}
+
+  /* Empty state */
+  .empty-state{padding:36px 16px}
+  .empty-state .ei{font-size:36px}
+  .empty-state h2{font-size:16px}
+  .empty-state p{font-size:13px}
+
+  /* Buttons */
+  .btn-primary{font-size:13px;padding:10px 16px}
+}
 </style>
 </head>
 <body>
