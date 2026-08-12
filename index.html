@@ -223,7 +223,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
 <body>
 
 <!-- ══════════ AUTH ══════════ -->
-<div class="auth-wrap" id="auth-wrap">
+<div class="auth-wrap" id="auth-wrap" style="display:none">
   <div class="auth-header"><div class="logo">Budget<span>.</span></div></div>
   <div class="auth-body">
     <div class="auth-card">
@@ -795,18 +795,23 @@ document.getElementById('del-modal').addEventListener('click',function(e){if(e.t
 // Restore session on page load
 (async function(){
   var saved = localStorage.getItem('budget_session');
-  if(!saved) return;
+  if(!saved){
+    // No session - show login
+    document.getElementById('auth-wrap').style.display='flex';
+    return;
+  }
   try{
     var session = JSON.parse(saved);
-    // Verify user still exists in DB
     var rows = await sbGet('budget_users','id=eq.'+session.id+'&select=id,email');
     if(rows.length){
-      loginUser(rows[0]);
+      await loginUser(rows[0]);
     } else {
       localStorage.removeItem('budget_session');
+      document.getElementById('auth-wrap').style.display='flex';
     }
   }catch(e){
     localStorage.removeItem('budget_session');
+    document.getElementById('auth-wrap').style.display='flex';
   }
 })();
 
