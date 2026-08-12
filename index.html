@@ -560,6 +560,8 @@ async function doSignup(){
 
 async function loginUser(u){
   currentUser=u;
+  // Persist session so refresh doesn't log out
+  localStorage.setItem('budget_session', JSON.stringify({id:u.id,email:u.email}));
   entries=[];budget={};editId=null;
   document.getElementById('auth-wrap').style.display='none';
   document.getElementById('app-wrap').classList.add('show');
@@ -577,6 +579,7 @@ async function loginUser(u){
 
 function doLogout(){
   currentUser=null;entries=[];budget={};
+  localStorage.removeItem('budget_session');
   document.getElementById('app-wrap').classList.remove('show');
   document.getElementById('auth-wrap').style.display='flex';
   document.getElementById('l-email').value='';document.getElementById('l-pw').value='';
@@ -788,6 +791,24 @@ function toast2(msg,color){
 }
 
 document.getElementById('del-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+
+// Restore session on page load
+(async function(){
+  var saved = localStorage.getItem('budget_session');
+  if(!saved) return;
+  try{
+    var session = JSON.parse(saved);
+    // Verify user still exists in DB
+    var rows = await sbGet('budget_users','id=eq.'+session.id+'&select=id,email');
+    if(rows.length){
+      loginUser(rows[0]);
+    } else {
+      localStorage.removeItem('budget_session');
+    }
+  }catch(e){
+    localStorage.removeItem('budget_session');
+  }
+})();
 
 function toggleEye(id,btn){
   var inp=document.getElementById(id);
