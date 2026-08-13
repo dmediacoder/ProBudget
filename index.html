@@ -679,7 +679,19 @@ function renderEntries(){
   var exp=entries.filter(e=>e.type==='expense');
   document.getElementById('lbl-inc').textContent=fmt(inc.reduce((s,e)=>s+e.amount,0));
   document.getElementById('lbl-exp').textContent=fmt(exp.reduce((s,e)=>s+e.amount,0));
-  renderList('inc-list',inc,'income');renderList('exp-list',exp,'expense');
+  renderList('inc-list',inc,'income');
+  renderList('exp-list',exp,'expense');
+  // Attach event listeners after render
+  attachEntryListeners();
+}
+
+function attachEntryListeners(){
+  document.querySelectorAll('.btn-edit').forEach(function(btn){
+    btn.onclick=function(){editEntry(btn.getAttribute('data-id'));};
+  });
+  document.querySelectorAll('.btn-del').forEach(function(btn){
+    btn.onclick=function(){deleteEntry(btn.getAttribute('data-id'));};
+  });
 }
 
 function renderList(id,list,type){
@@ -691,8 +703,8 @@ function renderList(id,list,type){
       <div class="einfo"><div class="ename">${e.category}</div><div class="esub">${e.frequency}</div></div>
       <div class="eamt ${type==='income'?'inc-amt':'exp-amt'}">${type==='income'?'+':'−'}${fmt(e.amount)}</div>
       <div style="display:flex;gap:4px">
-        <button class="btn-icon btn-edit" onclick="editEntry(${e.id})">✏️</button>
-        <button class="btn-icon btn-del" onclick="deleteEntry(${e.id})">🗑</button>
+        <button class="btn-icon btn-edit" data-id="${e.id}">✏️</button>
+        <button class="btn-icon btn-del" data-id="${e.id}">🗑</button>
       </div>
     </div>`).join('');
 }
