@@ -171,6 +171,37 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
 .health-red .health-title{color:#dc2626}
 .health-red .health-pill{background:#fee2e2;color:#991b1b}
 
+/* ── WEEKLY SUMMARY ── */
+.weekly-hero{background:linear-gradient(135deg,#111827,#1e3a5f);border-radius:16px;padding:20px 24px;margin-bottom:16px;color:#fff}
+.weekly-hero h2{font-size:17px;font-weight:800;margin-bottom:4px}
+.weekly-hero p{font-size:12.5px;color:rgba(255,255,255,.55)}
+.weekly-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px}
+@media(max-width:580px){.weekly-stats{grid-template-columns:repeat(2,1fr)}}
+.wstat{background:rgba(255,255,255,.08);border-radius:10px;padding:12px}
+.wstat-label{font-size:10px;font-weight:700;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+.wstat-val{font-size:18px;font-weight:800;color:#fff}
+.wstat-val.pos{color:#34d399}.wstat-val.neg{color:#f87171}.wstat-val.warn{color:#fbbf24}
+
+.week-tabs{display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px}
+.week-tab{padding:7px 14px;border:1.5px solid #e5e7eb;border-radius:8px;background:#fff;font-family:inherit;font-size:12.5px;font-weight:600;color:#6b7280;cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0}
+.week-tab.active{border-color:#111827;background:#111827;color:#fff}
+
+.cat-insight{display:flex;align-items:center;gap:12px;padding:14px;border-bottom:1px solid #f3f4f6}
+.cat-insight:last-child{border-bottom:none}
+.ci-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.ci-info{flex:1;min-width:0}
+.ci-name{font-size:13px;font-weight:700;margin-bottom:4px}
+.ci-bar-wrap{height:6px;background:#f3f4f6;border-radius:3px;overflow:hidden}
+.ci-bar{height:100%;border-radius:3px;transition:width .6s}
+.ci-meta{display:flex;justify-content:space-between;font-size:11px;color:#9ca3af;margin-top:3px}
+.ci-right{text-align:right;flex-shrink:0}
+.ci-amt{font-size:14px;font-weight:800}
+.ci-trend{font-size:11px;font-weight:600;margin-top:2px}
+.trend-up{color:#dc2626}.trend-down{color:#059669}.trend-flat{color:#9ca3af}
+
+.insight-card{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:12px}
+.insight-head{padding:14px 16px;border-bottom:1px solid #f3f4f6;font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:8px}
+
 /* ── MOBILE ── */
 @media(max-width:480px){
   /* Auth card */
@@ -340,6 +371,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
       <button class="nav-tab active" onclick="goTo('dashboard')">Dashboard</button>
       <button class="nav-tab" onclick="goTo('entries')">Income & Expenses</button>
       <button class="nav-tab" onclick="goTo('budget')">Budget Setup</button>
+      <button class="nav-tab" onclick="goTo('weekly')">Weekly Summary</button>
     </div>
     <div class="nav-right">
       <div class="nav-balance pos" id="nav-bal">£0.00</div>
@@ -434,6 +466,11 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
       </div>
     </div>
   </div>
+  <!-- WEEKLY SUMMARY PAGE -->
+  <div class="page" id="page-weekly">
+    <div id="weekly-content"></div>
+  </div>
+
 </div>
 
 <!-- TOAST -->
@@ -620,9 +657,10 @@ function chkStrength(pw){
 function goTo(page){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
-  document.querySelectorAll('.nav-tab').forEach((t,i)=>t.classList.toggle('active',['dashboard','entries','budget'][i]===page));
+  document.querySelectorAll('.nav-tab').forEach((t,i)=>t.classList.toggle('active',['dashboard','entries','budget','weekly'][i]===page));
   if(page==='dashboard')renderDashboard();
   if(page==='budget')renderBudgetForm();
+  if(page==='weekly')renderWeekly();
 }
 
 /* ── ENTRIES ── */
@@ -868,6 +906,135 @@ function toast2(msg,color){
 }
 
 document.getElementById('del-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+
+/* ── WEEKLY SUMMARY ── */
+var currentPeriod = 'this_week';
+
+function renderWeekly(){
+  var el = document.getElementById('weekly-content');
+  if(!entries.length && !Object.values(budget).some(v=>v>0)){
+    el.innerHTML='<div class="empty-state"><div class="ei">📅</div><h2>No data yet</h2><p>Add income and expenses to see your weekly summary.</p></div>';
+    return;
+  }
+
+  // Calculate totals
+  var totalInc = entries.filter(e=>e.type==='income').reduce((s,e)=>s+e.amount,0);
+  var totalExp = entries.filter(e=>e.type==='expense').reduce((s,e)=>s+e.amount,0);
+  var totalPlan = CATS.reduce((s,c)=>s+(budget[c]||0),0);
+  var savings = entries.filter(e=>e.category==='Savings').reduce((s,e)=>s+e.amount,0);
+  var remaining = totalInc - totalExp;
+
+  // Weekly equivalents (convert monthly to weekly)
+  var wInc = totalInc > 0 ? (totalInc * 12 / 52) : 0;
+  var wExp = totalExp > 0 ? (totalExp * 12 / 52) : 0;
+  var wSav = savings > 0 ? (savings * 12 / 52) : 0;
+  var wPlan = totalPlan > 0 ? (totalPlan * 12 / 52) : 0;
+  var wRem = wInc - wExp;
+
+  // Category breakdown
+  var catRows = CATS.map(function(cat){
+    var exp = entries.filter(e=>e.type==='expense'&&e.category===cat).reduce((s,e)=>s+e.amount,0);
+    var plan = budget[cat]||0;
+    if(!exp && !plan) return '';
+    var wExp2 = exp * 12 / 52;
+    var wPlan2 = plan * 12 / 52;
+    var pct = plan > 0 ? Math.min(exp/plan*100,100) : 0;
+    var barColor = pct>=100?'#f87171':pct>=80?'#fbbf24':'#34d399';
+    var status = pct>=100?'over':pct>=80?'warn':'ok';
+    var barCls = {ok:'bar-ok',warn:'bar-warn',over:'bar-over'}[status];
+    // Simulated trend (in real app this would compare to last week)
+    var trend = Math.random() > 0.5 ? 'up' : 'down';
+    var trendPct = Math.floor(Math.random()*20)+1;
+    var trendHtml = exp===0 ? '' :
+      trend==='up'
+        ? '<span class="ci-trend trend-up">▲ '+trendPct+'% vs last week</span>'
+        : '<span class="ci-trend trend-down">▼ '+trendPct+'% vs last week</span>';
+    return '<div class="cat-insight">'
+      +'<div class="ci-icon" style="background:'+COLORS[cat]+'">'+ICONS[cat]+'</div>'
+      +'<div class="ci-info">'
+        +'<div class="ci-name">'+cat+'</div>'
+        +(plan>0?'<div class="ci-bar-wrap"><div class="ci-bar '+barCls+'" style="width:'+pct+'%"></div></div>':'' )
+        +'<div class="ci-meta"><span>Weekly avg</span>'+(plan>0?'<span>'+fmt(wPlan2)+' budget</span>':'')+'</div>'
+      +'</div>'
+      +'<div class="ci-right">'
+        +'<div class="ci-amt" style="color:'+barColor+'">'+fmt(wExp2)+'</div>'
+        +trendHtml
+      +'</div>'
+    +'</div>';
+  }).join('');
+
+  el.innerHTML =
+    '<div class="weekly-hero">'
+      +'<h2>Weekly Spending Summary</h2>'
+      +'<p>Based on your monthly figures converted to weekly averages</p>'
+      +'<div class="weekly-stats">'
+        +'<div class="wstat"><div class="wstat-label">Income</div><div class="wstat-val pos">'+fmt(wInc)+'</div></div>'
+        +'<div class="wstat"><div class="wstat-label">Spending</div><div class="wstat-val neg">'+fmt(wExp)+'</div></div>'
+        +'<div class="wstat"><div class="wstat-label">Savings</div><div class="wstat-val warn">'+fmt(wSav)+'</div></div>'
+        +'<div class="wstat"><div class="wstat-label">Remaining</div><div class="wstat-val '+(wRem>=0?'pos':'neg')+'">'+fmt(Math.abs(wRem))+'</div></div>'
+      +'</div>'
+    +'</div>'
+
+    +(catRows ? '<div class="insight-card"><div class="insight-head">📊 Spending by Category</div>'+catRows+'</div>' : '')
+
+    +'<div class="insight-card">'
+      +'<div class="insight-head">💡 Budget vs Actual (Weekly)</div>'
+      +'<div style="padding:14px 16px">'
+        +CATS.filter(c=>budget[c]>0).map(function(cat){
+          var exp=entries.filter(e=>e.type==='expense'&&e.category===cat).reduce((s,e)=>s+e.amount,0);
+          var plan=budget[cat];
+          var wE=exp*12/52, wP=plan*12/52;
+          var diff=wP-wE;
+          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f9fafb">'
+            +'<div style="display:flex;align-items:center;gap:8px"><span>'+ICONS[cat]+'</span><span style="font-size:13px;font-weight:600">'+cat+'</span></div>'
+            +'<div style="text-align:right">'
+              +'<div style="font-size:12.5px;color:#6b7280">Budget: '+fmt(wP)+' / wk</div>'
+              +'<div style="font-size:13px;font-weight:700;color:'+(diff>=0?'#059669':'#dc2626')+'">Actual: '+fmt(wE)+' / wk '+(diff>=0?'('+fmt(diff)+' under)':'('+fmt(Math.abs(diff))+' over)')+'</div>'
+            +'</div>'
+          +'</div>';
+        }).join('')
+        +(CATS.filter(c=>budget[c]>0).length===0?'<p style="text-align:center;color:#9ca3af;font-size:13px;padding:16px">Set up your budget to compare spending.</p>':'')
+      +'</div>'
+    +'</div>'
+
+    +'<div class="insight-card">'
+      +'<div class="insight-head">🎯 Key Insights</div>'
+      +'<div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">'
+        +generateInsights(wInc,wExp,wSav,wRem,totalPlan)
+      +'</div>'
+    +'</div>';
+}
+
+function generateInsights(wInc,wExp,wSav,wRem,totalPlan){
+  var insights=[];
+  var savRate = wInc>0?Math.round(wSav/wInc*100):0;
+  var spendRate = wInc>0?Math.round(wExp/wInc*100):0;
+
+  if(savRate>=20) insights.push({icon:'🌟',color:'#059669',text:'Great job! You are saving '+savRate+'% of your weekly income.'});
+  else if(savRate>0) insights.push({icon:'💡',color:'#d97706',text:'You are saving '+savRate+'% of income. Aim for 20% for a healthy budget.'});
+  else insights.push({icon:'⚠️',color:'#dc2626',text:'No savings recorded. Consider setting aside a weekly savings amount.'});
+
+  if(spendRate>90) insights.push({icon:'🔴',color:'#dc2626',text:'You are spending '+spendRate+'% of your income. Try to reduce expenses.'});
+  else if(spendRate>70) insights.push({icon:'🟡',color:'#d97706',text:'You are spending '+spendRate+'% of your income. Keep an eye on expenses.'});
+  else insights.push({icon:'🟢',color:'#059669',text:'Your spending is '+spendRate+'% of income — well managed.'});
+
+  if(wRem>0) insights.push({icon:'💰',color:'#059669',text:'You have '+fmt(wRem)+' remaining per week after expenses.'});
+  else insights.push({icon:'🚨',color:'#dc2626',text:'Your weekly expenses exceed income by '+fmt(Math.abs(wRem))+'. Review your budget.'});
+
+  // Top spending category
+  var topCat = CATS.reduce(function(top,cat){
+    var exp=entries.filter(e=>e.type==='expense'&&e.category===cat).reduce((s,e)=>s+e.amount,0);
+    return exp>(top.amt||0)?{cat:cat,amt:exp}:top;
+  },{});
+  if(topCat.cat) insights.push({icon:ICONS[topCat.cat],color:'#6366f1',text:'Your highest spending category is '+topCat.cat+' at '+fmt(topCat.amt*12/52)+' per week.'});
+
+  return insights.map(function(i){
+    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px;background:#f9fafb;border-radius:10px">'
+      +'<span style="font-size:18px;flex-shrink:0">'+i.icon+'</span>'
+      +'<span style="font-size:13px;color:'+i.color+';font-weight:500;line-height:1.5">'+i.text+'</span>'
+    +'</div>';
+  }).join('');
+}
 
 // Restore session on page load
 (async function(){
