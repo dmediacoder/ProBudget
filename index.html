@@ -153,6 +153,24 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
 .modal-btns{display:flex;gap:8px}
 .modal-btns button{flex:1;padding:10px;border:none;border-radius:9px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
 
+/* ── BUDGET HEALTH INDICATOR ── */
+.health-bar{display:flex;align-items:center;gap:14px;background:#fff;border-radius:14px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:16px}
+.health-dial{position:relative;width:72px;height:72px;flex-shrink:0}
+.health-dial svg{transform:rotate(-90deg)}
+.health-dial-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column}
+.health-dial-pct{font-size:15px;font-weight:800;line-height:1}
+.health-dial-lbl{font-size:9px;font-weight:700;color:#9ca3af;letter-spacing:.05em;margin-top:1px}
+.health-info{flex:1}
+.health-title{font-size:14px;font-weight:800;margin-bottom:3px}
+.health-desc{font-size:12.5px;color:#6b7280;line-height:1.5}
+.health-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-top:6px}
+.health-green .health-title{color:#059669}
+.health-green .health-pill{background:#d1fae5;color:#065f46}
+.health-amber .health-title{color:#d97706}
+.health-amber .health-pill{background:#fef3c7;color:#92400e}
+.health-red .health-title{color:#dc2626}
+.health-red .health-pill{background:#fee2e2;color:#991b1b}
+
 /* ── MOBILE ── */
 @media(max-width:480px){
   /* Auth card */
@@ -345,6 +363,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
         <div class="sum-card"><div class="sum-card-label">Actual Spending</div><div class="sum-card-val" id="d-actual">£0.00</div><div class="sum-card-sub">Expenses recorded</div></div>
         <div class="sum-card"><div class="sum-card-label">Remaining Funds</div><div class="sum-card-val" id="d-rem">£0.00</div><div class="sum-card-sub">Available − Actual</div></div>
       </div>
+      <div id="health-indicator" class="health-bar" style="display:none"></div>
       <div class="warnings" id="d-warnings"></div>
       <div class="card">
         <div class="card-head"><div class="card-title">Budget by Category</div></div>
@@ -770,10 +789,12 @@ function renderDashboard(){
     var labels={ok:'On Track',warn:'Approaching Limit',over:'Over Budget'};
     var pc={ok:'pill-ok',warn:'pill-warn',over:'pill-over'};
     var bc={ok:'bar-ok',warn:'bar-warn',over:'bar-over'};
+    // Category health dot
+    var hdot=st==='ok'?'🟢':st==='warn'?'🟡':'🔴';
     return`<tr>
       <td><div class="cat-icon-cell">
         <div class="cat-icon" style="background:${COLORS[c]}">${ICONS[c]}</div>
-        <div><div class="cat-name">${c}</div><div class="cat-bar-wrap"><div class="cat-bar ${bc[st]}" style="width:${pct}%"></div></div></div>
+        <div><div class="cat-name">${c} <span style="font-size:11px">${hdot}</span></div><div class="cat-bar-wrap"><div class="cat-bar ${bc[st]}" style="width:${pct}%"></div></div></div>
       </div></td>
       <td class="amount-cell hide-m">${fmt(plan)}</td>
       <td class="amount-cell hide-m">${fmt(ca)}</td>
@@ -782,7 +803,51 @@ function renderDashboard(){
     </tr>`;
   }).join('');
   document.getElementById('cat-body').innerHTML=rows||'<tr><td colspan="5" style="text-align:center;padding:20px;color:#9ca3af;font-size:13px">No categories budgeted yet.</td></tr>';
+  renderHealthIndicator(actual, planned);
   updateNavBal();
+}
+
+function renderHealthIndicator(actual, planned){
+  var el=document.getElementById('health-indicator');
+  if(!planned){el.style.display='none';return;}
+  el.style.display='flex';
+  var pct=planned>0?Math.round(actual/planned*100):0;
+  var clamp=Math.min(pct,100);
+  
+  var status=pct>=100?'red':pct>=80?'amber':'green';
+  var COLOR={green:'#059669',amber:'#d97706',red:'#dc2626'};
+  var TITLE={green:'Budget On Track',amber:'Approaching Limit',red:'Over Budget'};
+  var DESC={
+    green:'Your spending is within budget. Keep it up!',
+    amber:'You've used '+pct+'% of your budget. Slow down on spending.',
+    red:'You've exceeded your budget by '+fmt(actual-planned)+'.'
+  };
+  var ICON={green:'✅',amber:'⚠️',red:'🔴'};
+
+  // SVG circle
+  var r=28,circ=2*Math.PI*r;
+  var offset=circ-(clamp/100)*circ;
+  var col=COLOR[status];
+
+  el.className='health-bar health-'+status;
+  el.innerHTML=`
+    <div class="health-dial">
+      <svg width="72" height="72" viewBox="0 0 72 72">
+        <circle cx="36" cy="36" r="${r}" fill="none" stroke="#f3f4f6" stroke-width="7"/>
+        <circle cx="36" cy="36" r="${r}" fill="none" stroke="${col}" stroke-width="7"
+          stroke-dasharray="${circ}" stroke-dashoffset="${offset}" stroke-linecap="round"
+          style="transition:stroke-dashoffset .6s ease"/>
+      </svg>
+      <div class="health-dial-num">
+        <div class="health-dial-pct" style="color:${col}">${pct}%</div>
+        <div class="health-dial-lbl">USED</div>
+      </div>
+    </div>
+    <div class="health-info">
+      <div class="health-title">${TITLE[status]}</div>
+      <div class="health-desc">${DESC[status]}</div>
+      <div class="health-pill">${ICON[status]} ${TITLE[status]}</div>
+    </div>`;
 }
 
 function updateNavBal(){
