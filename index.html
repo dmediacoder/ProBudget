@@ -117,7 +117,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
 .entry{display:flex;align-items:center;gap:10px;padding:11px 14px;background:#f9fafb;border-radius:10px;border:1px solid #f3f4f6;transition:all .15s}
 .entry:hover{border-color:#e5e7eb;background:#fff}
 .ecat-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
-.einfo{flex:1;min-width:0}.ename{font-size:13px;font-weight:600}.esub{font-size:11.5px;color:#9ca3af;margin-top:1px}
+.einfo{flex:1;min-width:0}.ename{font-size:13px;font-weight:600}.esub{font-size:11.5px;color:#9ca3af;margin-top:1px}.edesc{font-size:11.5px;color:#6b7280;margin-top:1px;font-style:italic}
 .eamt{font-size:14px;font-weight:800;flex-shrink:0}
 .inc-amt{color:#059669}.exp-amt{color:#dc2626}
 .btn-icon{width:28px;height:28px;border:none;border-radius:7px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s}
@@ -320,6 +320,24 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
           <div class="field"><label>Amount (£)</label>
             <input type="text" id="f-amt" placeholder="0.00" inputmode="decimal"/>
             <div class="ferr" id="e-amt">Enter a valid amount greater than 0</div></div>
+          <div class="field"><label>Description <span style="font-weight:400;text-transform:none;font-size:11px;color:#9ca3af">(optional)</span></label>
+            <div style="position:relative">
+              <input type="text" id="f-desc" placeholder="e.g. Tesco, Netflix, Bus pass..." autocomplete="off" oninput="onDescInput(this.value)"/>
+              <div id="cat-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid #6366f1;border-top:none;border-radius:0 0 10px 10px;z-index:20;padding:10px 14px;font-size:13px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.08)">
+                <span style="color:#9ca3af;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Suggested</span>
+                <div id="cat-suggest-inner" style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span id="suggest-icon" style="font-size:18px"></span>
+                    <span id="suggest-label" style="font-weight:700;color:#111827"></span>
+                  </div>
+                  <div style="display:flex;gap:6px">
+                    <button onclick="acceptSuggest()" style="background:#6366f1;color:#fff;border:none;padding:5px 12px;border-radius:7px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer">Use</button>
+                    <button onclick="dismissSuggest()" style="background:#f3f4f6;color:#6b7280;border:none;padding:5px 10px;border-radius:7px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">✕</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="field"><label>Frequency</label>
             <select id="f-freq"><option value="monthly">Monthly</option><option value="weekly">Weekly</option></select></div>
           <div style="display:flex;gap:8px;margin-top:4px">
@@ -477,13 +495,16 @@ async function doReset(){
 }
 
 async function loginUser(u){
-  currentUser=u;entries=[];budget={};editId=null;
+  currentUser=u;entries=[];budget={};editId=null;patternMap={};
   localStorage.setItem('budget_session',JSON.stringify({id:u.id,email:u.email}));
+  loadPatterns();
   document.getElementById('auth-wrap').style.display='none';
   document.getElementById('app-wrap').classList.add('show');
   try{
     var dbE=await sbGet('budget_entries','user_id=eq.'+u.id+'&select=*&order=created_at.asc');
-    entries=dbE.map(function(e){return{id:e.id,type:e.type,category:e.category,amount:parseFloat(e.amount),frequency:e.frequency};});
+    entries=dbE.map(function(e){return{id:e.id,type:e.type,category:e.category,amount:parseFloat(e.amount),frequency:e.frequency,description:e.description||''};});
+    // Learn patterns from existing entries
+    entries.filter(function(e){return e.type==='expense'&&e.description;}).forEach(function(e){learnPattern(e.description,e.category);});
     var dbB=await sbGet('budget_plans','user_id=eq.'+u.id+'&select=*');
     dbB.forEach(function(b){budget[b.category]=parseFloat(b.planned_amount);});
   }catch(e){console.error('Load error',e);}
@@ -515,22 +536,25 @@ function switchTab(tab){
 }
 
 async function saveEntry(){
-  var cat=document.getElementById('f-cat').value,amtS=document.getElementById('f-amt').value.trim(),amt=parseFloat(amtS),freq=document.getElementById('f-freq').value,ok=true;
+  var cat=document.getElementById('f-cat').value,amtS=document.getElementById('f-amt').value.trim(),amt=parseFloat(amtS),freq=document.getElementById('f-freq').value,desc=(document.getElementById('f-desc').value||'').trim(),ok=true;
   document.getElementById('e-cat').classList.remove('show');document.getElementById('f-cat').classList.remove('err');
   document.getElementById('e-amt').classList.remove('show');document.getElementById('f-amt').classList.remove('err');
   if(!cat){document.getElementById('e-cat').classList.add('show');document.getElementById('f-cat').classList.add('err');ok=false;}
   if(!amtS||isNaN(amt)||amt<=0){document.getElementById('e-amt').classList.add('show');document.getElementById('f-amt').classList.add('err');ok=false;}
   if(!ok)return;
+  // Learn description -> category mapping
+  if(desc&&cat&&entryTab==='expense'){learnPattern(desc,cat);}
+  dismissSuggest();
   try{
     if(editId!==null){
-      await sbPatch('budget_entries','id=eq.'+editId,{type:entryTab,category:cat,amount:amt,frequency:freq});
+      await sbPatch('budget_entries','id=eq.'+editId,{type:entryTab,category:cat,amount:amt,frequency:freq,description:desc});
       var e=entries.find(function(x){return x.id===editId;});
-      if(e){e.category=cat;e.amount=amt;e.frequency=freq;e.type=entryTab;}
+      if(e){e.category=cat;e.amount=amt;e.frequency=freq;e.type=entryTab;e.description=desc;}
       editId=null;document.getElementById('form-title').textContent='New Entry';
       toast2('Entry updated','#34d399');
     }else{
-      var rows=await sbPost('budget_entries',{user_id:currentUser.id,type:entryTab,category:cat,amount:amt,frequency:freq});
-      entries.push({id:rows[0].id,type:entryTab,category:cat,amount:amt,frequency:freq});
+      var rows=await sbPost('budget_entries',{user_id:currentUser.id,type:entryTab,category:cat,amount:amt,frequency:freq,description:desc});
+      entries.push({id:rows[0].id,type:entryTab,category:cat,amount:amt,frequency:freq,description:desc});
       toast2((entryTab==='income'?'Income':'Expense')+' saved','#34d399');
     }
     clearEntryForm();renderEntries();renderDashboard();updateNavBal();
@@ -539,15 +563,16 @@ async function saveEntry(){
 
 function cancelEdit(){editId=null;clearEntryForm();document.getElementById('form-title').textContent='New Entry';}
 function clearEntryForm(){
-  document.getElementById('f-cat').value='';document.getElementById('f-amt').value='';document.getElementById('f-freq').value='monthly';
+  document.getElementById('f-cat').value='';document.getElementById('f-amt').value='';document.getElementById('f-freq').value='monthly';document.getElementById('f-desc').value='';
   document.getElementById('e-cat').classList.remove('show');document.getElementById('f-cat').classList.remove('err');
   document.getElementById('e-amt').classList.remove('show');document.getElementById('f-amt').classList.remove('err');
+  dismissSuggest();
 }
 
 function editEntry(id){
   var e=entries.find(function(x){return x.id===id;});if(!e)return;
   editId=id;switchTab(e.type);
-  document.getElementById('f-cat').value=e.category;document.getElementById('f-amt').value=e.amount.toFixed(2);document.getElementById('f-freq').value=e.frequency;
+  document.getElementById('f-cat').value=e.category;document.getElementById('f-amt').value=e.amount.toFixed(2);document.getElementById('f-freq').value=e.frequency;document.getElementById('f-desc').value=e.description||'';
   document.getElementById('form-title').textContent='Edit Entry';
   goTo('entries');window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -578,7 +603,7 @@ function renderList(id,list,type){
   el.innerHTML=list.map(function(e){
     return '<div class="entry">'
       +'<div class="ecat-icon" style="background:'+(COLORS[e.category]||'#f3f4f6')+'">'+(ICONS[e.category]||'📦')+'</div>'
-      +'<div class="einfo"><div class="ename">'+e.category+'</div><div class="esub">'+e.frequency+'</div></div>'
+      +'<div class="einfo"><div class="ename">'+(e.description||e.category)+'</div><div class="esub">'+e.category+' · '+e.frequency+'</div></div>'
       +'<div class="eamt '+(type==='income'?'inc-amt':'exp-amt')+'">'+(type==='income'?'+':'-')+fmt(e.amount)+'</div>'
       +'<div style="display:flex;gap:4px">'
         +'<button class="btn-icon btn-edit" data-id="'+e.id+'">&#9999;</button>'
@@ -780,6 +805,65 @@ function chkStrength2(pw){
 }
 
 document.getElementById('del-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+
+// ── AUTO-MATCHING ──
+var patternMap = {}; // {keyword: category}
+
+function loadPatterns(){
+  try{var p=localStorage.getItem('budget_patterns_'+(currentUser?currentUser.id:''));if(p)patternMap=JSON.parse(p);}catch(e){}
+}
+
+function savePatterns(){
+  try{localStorage.setItem('budget_patterns_'+(currentUser?currentUser.id:''),JSON.stringify(patternMap));}catch(e){}
+}
+
+function learnPattern(desc,cat){
+  // Store each word and the full description (lowercase)
+  var key=desc.toLowerCase().trim();
+  patternMap[key]=cat;
+  // Also store individual words for partial matching
+  key.split(/\s+/).forEach(function(word){if(word.length>2)patternMap[word]=cat;});
+  savePatterns();
+}
+
+function suggestCategory(desc){
+  if(!desc||desc.length<2)return null;
+  var lower=desc.toLowerCase().trim();
+  // Exact match first
+  if(patternMap[lower])return patternMap[lower];
+  // Word-by-word match
+  var words=lower.split(/\s+/);
+  for(var i=0;i<words.length;i++){if(words[i].length>2&&patternMap[words[i]])return patternMap[words[i]];}
+  // Partial string match
+  var keys=Object.keys(patternMap);
+  for(var j=0;j<keys.length;j++){if(keys[j].length>3&&(lower.includes(keys[j])||keys[j].includes(lower)))return patternMap[keys[j]];}
+  return null;
+}
+
+var _suggestCat=null;
+function onDescInput(val){
+  if(entryTab!=='expense'){dismissSuggest();return;}
+  var suggestion=suggestCategory(val);
+  if(suggestion&&val.trim().length>=2){
+    _suggestCat=suggestion;
+    document.getElementById('suggest-icon').textContent=ICONS[suggestion]||'📦';
+    document.getElementById('suggest-label').textContent=suggestion;
+    document.getElementById('cat-suggest').style.display='block';
+  }else{dismissSuggest();}
+}
+
+function acceptSuggest(){
+  if(_suggestCat){
+    document.getElementById('f-cat').value=_suggestCat;
+    toast2('Category set to '+_suggestCat,'#6366f1');
+  }
+  dismissSuggest();
+}
+
+function dismissSuggest(){
+  document.getElementById('cat-suggest').style.display='none';
+  _suggestCat=null;
+}
 
 // Session restore
 (async function(){
