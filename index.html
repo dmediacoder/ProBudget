@@ -392,12 +392,35 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
 <script>
 var SB_URL='https://opntstuzymdqkcddfjfn.supabase.co';
 var SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9wbnRzdHV6eW1kcWtjZGRmamZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2NjU1NTcsImV4cCI6MjEwMDI0MTU1N30.vTj7S4Mt0fjBAmIBgSo2yYI0l9atcgoQQ35-Cl9NjoE';
-function sbH(){return{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};}
-async function sbGet(t,q){var r=await fetch(SB_URL+'/rest/v1/'+t+'?'+q,{headers:sbH()});if(!r.ok)throw new Error(await r.text());return r.json();}
-async function sbPost(t,d){var r=await fetch(SB_URL+'/rest/v1/'+t,{method:'POST',headers:{...sbH(),'Prefer':'return=representation'},body:JSON.stringify(d)});if(!r.ok)throw new Error(await r.text());return r.json();}
-async function sbPatch(t,q,d){var r=await fetch(SB_URL+'/rest/v1/'+t+'?'+q,{method:'PATCH',headers:{...sbH(),'Prefer':'return=representation'},body:JSON.stringify(d)});if(!r.ok)throw new Error(await r.text());return r.json();}
-async function sbDel(t,q){var r=await fetch(SB_URL+'/rest/v1/'+t+'?'+q,{method:'DELETE',headers:sbH()});if(!r.ok)throw new Error(await r.text());}
-async function hashPw(pw){var buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pw));return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');}
+var _authToken=null;
+
+function sbH(token){return{'apikey':SB_KEY,'Authorization':'Bearer '+(token||SB_KEY),'Content-Type':'application/json'};}
+async function sbGet(t,q){var r=await fetch(SB_URL+'/rest/v1/'+t+'?'+q,{headers:sbH(_authToken)});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function sbPost(t,d){var r=await fetch(SB_URL+'/rest/v1/'+t,{method:'POST',headers:{...sbH(_authToken),'Prefer':'return=representation'},body:JSON.stringify(d)});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function sbPatch(t,q,d){var r=await fetch(SB_URL+'/rest/v1/'+t+'?'+q,{method:'PATCH',headers:{...sbH(_authToken),'Prefer':'return=representation'},body:JSON.stringify(d)});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function sbDel(t,q){var r=await fetch(SB_URL+'/rest/v1/'+t+'?'+q,{method:'DELETE',headers:sbH(_authToken)});if(!r.ok)throw new Error(await r.text());}
+
+// Supabase Auth API
+async function authSignUp(email,pw){
+  var r=await fetch(SB_URL+'/auth/v1/signup',{method:'POST',headers:sbH(),body:JSON.stringify({email:email,password:pw})});
+  var d=await r.json();if(d.error)throw new Error(d.error.message||d.msg||JSON.stringify(d.error));return d;
+}
+async function authSignIn(email,pw){
+  var r=await fetch(SB_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:sbH(),body:JSON.stringify({email:email,password:pw})});
+  var d=await r.json();if(d.error)throw new Error(d.error.message||d.msg||JSON.stringify(d.error));return d;
+}
+async function authResetPassword(email){
+  var r=await fetch(SB_URL+'/auth/v1/recover',{method:'POST',headers:sbH(),body:JSON.stringify({email:email,redirect_to:'https://pro-budget-tau.vercel.app/'})});
+  var d=await r.json();if(d.error)throw new Error(d.error.message||d.msg||JSON.stringify(d.error));return d;
+}
+async function authUpdatePassword(newPw,token){
+  var r=await fetch(SB_URL+'/auth/v1/user',{method:'PUT',headers:sbH(token),body:JSON.stringify({password:newPw})});
+  var d=await r.json();if(d.error)throw new Error(d.error.message||d.msg||JSON.stringify(d.error));return d;
+}
+async function authRefresh(refreshToken){
+  var r=await fetch(SB_URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:sbH(),body:JSON.stringify({refresh_token:refreshToken})});
+  var d=await r.json();if(d.error)throw new Error(d.error.message);return d;
+}
 
 var currentUser=null,entries=[],budget={},editId=null,delId=null,entryTab='income',resetToken=null,resetEmail=null;
 var CATS=['Food','Shopping','Miscellaneous','Transport','Savings','Health'];
@@ -431,12 +454,15 @@ async function doLogin(){
   if(!ok)return;
   setBtn('l-btn','l-spin','l-lbl',true,'Log In');
   try{
-    var hash=await hashPw(pw);
-    var rows=await sbGet('budget_users','email=eq.'+encodeURIComponent(email.toLowerCase())+'&select=id,email,password_hash');
-    if(!rows.length||rows[0].password_hash!==hash){showAlert('Incorrect email or password.','error');setBtn('l-btn','l-spin','l-lbl',false,'Log In');return;}
+    var data=await authSignIn(email,pw);
+    _authToken=data.access_token;
+    localStorage.setItem('budget_session',JSON.stringify({id:data.user.id,email:data.user.email,access_token:data.access_token,refresh_token:data.refresh_token}));
     setBtn('l-btn','l-spin','l-lbl',false,'Log In');
-    loginUser(rows[0]);
-  }catch(e){showAlert('Error: '+e.message,'error');setBtn('l-btn','l-spin','l-lbl',false,'Log In');}
+    loginUser({id:data.user.id,email:data.user.email});
+  }catch(e){
+    showAlert(e.message.includes('Invalid')?'Incorrect email or password.':'Error: '+e.message,'error');
+    setBtn('l-btn','l-spin','l-lbl',false,'Log In');
+  }
 }
 
 async function doSignup(){
@@ -449,29 +475,39 @@ async function doSignup(){
   if(!ok)return;
   setBtn('s-btn','s-spin','s-lbl',true,'Create Account');
   try{
-    var hash=await hashPw(pw);
-    var rows=await sbPost('budget_users',{email:email.toLowerCase(),password_hash:hash});
-    setBtn('s-btn','s-spin','s-lbl',false,'Create Account');
-    loginUser(rows[0]);
+    var data=await authSignUp(email,pw);
+    if(data.user&&data.access_token){
+      _authToken=data.access_token;
+      localStorage.setItem('budget_session',JSON.stringify({id:data.user.id,email:data.user.email,access_token:data.access_token,refresh_token:data.refresh_token}));
+      setBtn('s-btn','s-spin','s-lbl',false,'Create Account');
+      loginUser({id:data.user.id,email:data.user.email});
+    } else {
+      setBtn('s-btn','s-spin','s-lbl',false,'Create Account');
+      showAlert('Account created! Please check your email to confirm then log in.','success');
+      showTab('login');
+    }
   }catch(e){
     setBtn('s-btn','s-spin','s-lbl',false,'Create Account');
-    if(e.message.includes('duplicate')||e.message.includes('unique')||e.message.includes('23505')){showAlert('An account with this email already exists.','error');}
+    if(e.message.toLowerCase().includes('already')||e.message.includes('registered')){showAlert('An account with this email already exists. Please log in.','error');}
     else{showAlert('Error: '+e.message,'error');}
   }
 }
 
-function doForgot(){
+async function doForgot(){
   document.querySelectorAll('.ferr').forEach(function(e){e.classList.remove('show');});
   document.getElementById('a-alert').className='alert';
   var email=document.getElementById('fp-email').value.trim();
   if(!isEmail(email)){document.getElementById('e-fp-email').classList.add('show');return;}
   setBtn('fp-btn','fp-spin','fp-lbl',true,'Send Reset Link');
-  setTimeout(function(){
+  try{
+    await authResetPassword(email);
     setBtn('fp-btn','fp-spin','fp-lbl',false,'Send Reset Link');
-    resetToken='TOKEN-'+Math.random().toString(36).slice(2);resetEmail=email.toLowerCase();
-    showAlert('Reset email sent successfully. Check your inbox.','success');
-    setTimeout(function(){showTab('reset');showAlert('Reset link opened. Enter your new password.','success');},2000);
-  },1200);
+    showAlert('Reset email sent successfully. Check your inbox for the reset link.','success');
+  }catch(e){
+    setBtn('fp-btn','fp-spin','fp-lbl',false,'Send Reset Link');
+    // Always show success to prevent email enumeration
+    showAlert('Reset email sent successfully. Check your inbox for the reset link.','success');
+  }
 }
 
 async function doReset(){
@@ -481,13 +517,11 @@ async function doReset(){
   if(!isStrongPw(pw)){document.getElementById('e-rp-pw').classList.add('show');ok=false;}
   if(pw!==conf||!conf){document.getElementById('e-rp-conf').classList.add('show');ok=false;}
   if(!ok)return;
-  if(!resetToken||!resetEmail){showAlert('Reset link is invalid or expired.','error');return;}
+  if(!resetToken){showAlert('Reset link is invalid or expired. Please request a new one.','error');return;}
   setBtn('rp-btn','rp-spin','rp-lbl',true,'Save Password');
   try{
-    var hash=await hashPw(pw);
-    var rows=await sbGet('budget_users','email=eq.'+encodeURIComponent(resetEmail)+'&select=id');
-    if(rows.length)await sbPatch('budget_users','id=eq.'+rows[0].id,{password_hash:hash});
-    resetToken=null;resetEmail=null;
+    await authUpdatePassword(pw,resetToken);
+    resetToken=null;
     setBtn('rp-btn','rp-spin','rp-lbl',false,'Save Password');
     showAlert('Password updated successfully.','success');
     setTimeout(function(){showTab('login');},2000);
@@ -496,7 +530,6 @@ async function doReset(){
 
 async function loginUser(u){
   currentUser=u;entries=[];budget={};editId=null;patternMap={};
-  localStorage.setItem('budget_session',JSON.stringify({id:u.id,email:u.email}));
   loadPatterns();
   document.getElementById('auth-wrap').style.display='none';
   document.getElementById('app-wrap').classList.add('show');
@@ -511,8 +544,8 @@ async function loginUser(u){
   goTo('dashboard');renderEntries();renderBudgetForm();
 }
 
-function doLogout(){
-  currentUser=null;entries=[];budget={};
+async function doLogout(){
+  currentUser=null;entries=[];budget={};_authToken=null;
   localStorage.removeItem('budget_session');
   document.getElementById('app-wrap').classList.remove('show');
   document.getElementById('auth-wrap').style.display='flex';
@@ -865,15 +898,41 @@ function dismissSuggest(){
   _suggestCat=null;
 }
 
-// Session restore
+// Session restore + handle password reset link
 (async function(){
+  // Check for password reset token in URL hash
+  var hash=window.location.hash;
+  if(hash&&hash.includes('access_token')&&hash.includes('type=recovery')){
+    var params=new URLSearchParams(hash.replace('#',''));
+    var token=params.get('access_token');
+    if(token){
+      resetToken=token;
+      document.getElementById('auth-wrap').classList.add('show');
+      showTab('reset');
+      showAlert('Enter your new password below.','success');
+      // Clean URL
+      history.replaceState(null,'',window.location.pathname);
+      return;
+    }
+  }
+
+  // Restore existing session
   var saved=localStorage.getItem('budget_session');
   if(!saved){document.getElementById('auth-wrap').classList.add('show');return;}
   try{
     var session=JSON.parse(saved);
-    var rows=await sbGet('budget_users','id=eq.'+session.id+'&select=id,email');
-    if(rows.length){await loginUser(rows[0]);}
-    else{localStorage.removeItem('budget_session');document.getElementById('auth-wrap').classList.add('show');}
+    // Try to refresh the token
+    if(session.refresh_token){
+      try{
+        var refreshed=await authRefresh(session.refresh_token);
+        _authToken=refreshed.access_token;
+        localStorage.setItem('budget_session',JSON.stringify({id:refreshed.user.id,email:refreshed.user.email,access_token:refreshed.access_token,refresh_token:refreshed.refresh_token}));
+        await loginUser({id:refreshed.user.id,email:refreshed.user.email});
+        return;
+      }catch(re){console.log('Token refresh failed, clearing session');}
+    }
+    localStorage.removeItem('budget_session');
+    document.getElementById('auth-wrap').classList.add('show');
   }catch(e){localStorage.removeItem('budget_session');document.getElementById('auth-wrap').classList.add('show');}
 })();
 </script>
