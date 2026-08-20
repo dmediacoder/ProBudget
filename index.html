@@ -230,31 +230,23 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
         <div class="switch-link">Already have an account? <button onclick="showTab('login')">Log in</button></div>
       </div>
 
-      <!-- FORGOT PASSWORD -->
+      <!-- RESET PASSWORD (direct, no email link) -->
       <div id="forgot-form" style="display:none">
         <div class="auth-title">Reset your password</div>
-        <div class="auth-sub">Enter your email and we will send a reset link.</div>
+        <div class="auth-sub">Enter your account email and choose a new password.</div>
         <div class="field"><label>Email address</label>
           <input type="email" id="fp-email" placeholder="you@example.com"/>
           <div class="ferr" id="e-fp-email">Enter a valid email address</div></div>
-        <button class="btn-submit" id="fp-btn" onclick="doForgot()"><div class="spin" id="fp-spin"></div><span id="fp-lbl">Send Reset Link</span></button>
-        <div class="switch-link"><button onclick="showTab('login')" style="background:none;border:none;color:#6366f1;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:underline">Back to Log In</button></div>
-      </div>
-
-      <!-- RESET PASSWORD -->
-      <div id="reset-form" style="display:none">
-        <div class="auth-title">Create new password</div>
-        <div class="auth-sub">Enter and confirm your new password.</div>
         <div class="field"><label>New password</label>
-          <div class="pw-wrap"><input type="password" id="rp-pw" placeholder="New password" oninput="chkStrength2(this.value)"/>
-          <button type="button" class="pw-eye" onclick="toggleEye('rp-pw',this)" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></div>
-          <div id="pw-meter2" style="display:none"><div class="pw-bars"><div class="pw-bar" id="pb21"></div><div class="pw-bar" id="pb22"></div><div class="pw-bar" id="pb23"></div><div class="pw-bar" id="pb24"></div></div><div class="pw-lbl" id="pw-lbl2">Weak</div></div>
-          <div class="ferr" id="e-rp-pw">Must be 8+ characters with a number</div></div>
+          <div class="pw-wrap"><input type="password" id="fp-pw" placeholder="New password" oninput="chkStrength(this.value)"/>
+          <button type="button" class="pw-eye" onclick="toggleEye('fp-pw',this)" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></div>
+          <div id="pw-meter" style="display:none"><div class="pw-bars"><div class="pw-bar" id="pb1"></div><div class="pw-bar" id="pb2"></div><div class="pw-bar" id="pb3"></div><div class="pw-bar" id="pb4"></div></div><div class="pw-lbl" id="pw-lbl">Weak</div></div>
+          <div class="ferr" id="e-fp-pw">Must be 8+ characters with a number</div></div>
         <div class="field"><label>Confirm new password</label>
-          <div class="pw-wrap"><input type="password" id="rp-conf" placeholder="Repeat new password" onkeydown="if(event.key==='Enter')doReset()"/>
-          <button type="button" class="pw-eye" onclick="toggleEye('rp-conf',this)" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></div>
-          <div class="ferr" id="e-rp-conf">Passwords do not match</div></div>
-        <button class="btn-submit" id="rp-btn" onclick="doReset()"><div class="spin" id="rp-spin"></div><span id="rp-lbl">Save Password</span></button>
+          <div class="pw-wrap"><input type="password" id="fp-conf" placeholder="Repeat new password" onkeydown="if(event.key==='Enter')doForgot()"/>
+          <button type="button" class="pw-eye" onclick="toggleEye('fp-conf',this)" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></div>
+          <div class="ferr" id="e-fp-conf">Passwords do not match</div></div>
+        <button class="btn-submit" id="fp-btn" onclick="doForgot()"><div class="spin" id="fp-spin"></div><span id="fp-lbl">Reset Password</span></button>
         <div class="switch-link"><button onclick="showTab('login')" style="background:none;border:none;color:#6366f1;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:underline">Back to Log In</button></div>
       </div>
     </div>
@@ -409,20 +401,12 @@ async function authSignIn(email,pw){
   var r=await fetch(SB_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:sbH(),body:JSON.stringify({email:email,password:pw})});
   var d=await r.json();if(d.error)throw new Error(d.error.message||d.msg||JSON.stringify(d.error));return d;
 }
-async function authResetPassword(email){
-  var r=await fetch(SB_URL+'/auth/v1/recover',{method:'POST',headers:sbH(),body:JSON.stringify({email:email,redirect_to:'https://pro-budget-tau.vercel.app/'})});
-  var d=await r.json();if(d.error)throw new Error(d.error.message||d.msg||JSON.stringify(d.error));return d;
-}
-async function authUpdatePassword(newPw,token){
-  var r=await fetch(SB_URL+'/auth/v1/user',{method:'PUT',headers:sbH(token),body:JSON.stringify({password:newPw})});
-  var d=await r.json();if(d.error)throw new Error(d.error.message||d.msg||JSON.stringify(d.error));return d;
-}
 async function authRefresh(refreshToken){
   var r=await fetch(SB_URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:sbH(),body:JSON.stringify({refresh_token:refreshToken})});
   var d=await r.json();if(d.error)throw new Error(d.error.message);return d;
 }
 
-var currentUser=null,entries=[],budget={},editId=null,delId=null,entryTab='income',resetToken=null,resetEmail=null;
+var currentUser=null,entries=[],budget={},editId=null,delId=null,entryTab='income';
 var CATS=['Food','Shopping','Miscellaneous','Transport','Savings','Health'];
 var ICONS={Food:'🍽',Shopping:'🛍',Miscellaneous:'📦',Transport:'🚌',Savings:'💰',Health:'❤️'};
 var COLORS={Food:'#fef3c7',Shopping:'#ede9fe',Miscellaneous:'#f3f4f6',Transport:'#dbeafe',Savings:'#d1fae5',Health:'#fee2e2'};
@@ -434,10 +418,10 @@ function isStrongPw(p){return p.length>=8&&/\d/.test(p);}
 function hasBudget(){return CATS.some(c=>budget[c]>0);}
 
 function showTab(t){
-  ['login-form','signup-form','forgot-form','reset-form'].forEach(function(f){document.getElementById(f).style.display='none';});
+  ['login-form','signup-form','forgot-form'].forEach(function(f){document.getElementById(f).style.display='none';});
   document.getElementById(t+'-form').style.display='block';
   document.querySelectorAll('.auth-tab').forEach(function(b,i){b.classList.toggle('active',(i===0&&t==='login')||(i===1&&t==='signup'));});
-  document.getElementById('auth-tabs-bar').style.display=(t==='forgot'||t==='reset')?'none':'flex';
+  document.getElementById('auth-tabs-bar').style.display=(t==='forgot')?'none':'flex';
   document.getElementById('a-alert').className='alert';
   document.querySelectorAll('.ferr').forEach(function(e){e.classList.remove('show');});
 }
@@ -493,39 +477,33 @@ async function doSignup(){
   }
 }
 
+// Direct password reset — no email link. Calls our own serverless
+// function, which uses the Supabase service role key (server-side only)
+// to set the new password immediately.
 async function doForgot(){
   document.querySelectorAll('.ferr').forEach(function(e){e.classList.remove('show');});
   document.getElementById('a-alert').className='alert';
   var email=document.getElementById('fp-email').value.trim();
-  if(!isEmail(email)){document.getElementById('e-fp-email').classList.add('show');return;}
-  setBtn('fp-btn','fp-spin','fp-lbl',true,'Send Reset Link');
-  try{
-    await authResetPassword(email);
-    setBtn('fp-btn','fp-spin','fp-lbl',false,'Send Reset Link');
-    showAlert('Reset email sent successfully. Check your inbox for the reset link.','success');
-  }catch(e){
-    setBtn('fp-btn','fp-spin','fp-lbl',false,'Send Reset Link');
-    // Always show success to prevent email enumeration
-    showAlert('Reset email sent successfully. Check your inbox for the reset link.','success');
-  }
-}
-
-async function doReset(){
-  document.querySelectorAll('.ferr').forEach(function(e){e.classList.remove('show');});
-  document.getElementById('a-alert').className='alert';
-  var pw=document.getElementById('rp-pw').value,conf=document.getElementById('rp-conf').value,ok=true;
-  if(!isStrongPw(pw)){document.getElementById('e-rp-pw').classList.add('show');ok=false;}
-  if(pw!==conf||!conf){document.getElementById('e-rp-conf').classList.add('show');ok=false;}
+  var pw=document.getElementById('fp-pw').value;
+  var conf=document.getElementById('fp-conf').value;
+  var ok=true;
+  if(!isEmail(email)){document.getElementById('e-fp-email').classList.add('show');ok=false;}
+  if(!isStrongPw(pw)){document.getElementById('e-fp-pw').classList.add('show');ok=false;}
+  if(pw!==conf||!conf){document.getElementById('e-fp-conf').classList.add('show');ok=false;}
   if(!ok)return;
-  if(!resetToken){showAlert('Reset link is invalid or expired. Please request a new one.','error');return;}
-  setBtn('rp-btn','rp-spin','rp-lbl',true,'Save Password');
+  setBtn('fp-btn','fp-spin','fp-lbl',true,'Reset Password');
   try{
-    await authUpdatePassword(pw,resetToken);
-    resetToken=null;
-    setBtn('rp-btn','rp-spin','rp-lbl',false,'Save Password');
-    showAlert('Password updated successfully.','success');
-    setTimeout(function(){showTab('login');},2000);
-  }catch(e){setBtn('rp-btn','rp-spin','rp-lbl',false,'Save Password');showAlert('Error: '+e.message,'error');}
+    var r=await fetch('/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,newPassword:pw})});
+    var d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Could not reset password');
+    setBtn('fp-btn','fp-spin','fp-lbl',false,'Reset Password');
+    showAlert('Password updated. You can now log in with your new password.','success');
+    document.getElementById('fp-email').value='';document.getElementById('fp-pw').value='';document.getElementById('fp-conf').value='';
+    setTimeout(function(){showTab('login');},1500);
+  }catch(e){
+    setBtn('fp-btn','fp-spin','fp-lbl',false,'Reset Password');
+    showAlert('Error: '+e.message,'error');
+  }
 }
 
 async function loginUser(u){
@@ -830,12 +808,6 @@ function chkStrength(pw){
   for(var i=1;i<=4;i++)document.getElementById('pb'+i).style.background=i<=s+1?SC[s]:'#e5e7eb';
   var l=document.getElementById('pw-lbl');l.textContent=SL[s];l.style.color=SC[s];
 }
-function chkStrength2(pw){
-  var m=document.getElementById('pw-meter2');if(!pw){m.style.display='none';return;}m.style.display='block';
-  var s=0;if(pw.length>=8)s++;if(pw.length>=12)s++;if(/\d/.test(pw))s++;if(/[^a-zA-Z0-9]/.test(pw))s++;s=Math.max(0,Math.min(3,s));
-  for(var i=1;i<=4;i++)document.getElementById('pb2'+i).style.background=i<=s+1?SC[s]:'#e5e7eb';
-  var l=document.getElementById('pw-lbl2');l.textContent=SL[s];l.style.color=SC[s];
-}
 
 document.getElementById('del-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
 
@@ -898,30 +870,12 @@ function dismissSuggest(){
   _suggestCat=null;
 }
 
-// Session restore + handle password reset link
+// Session restore
 (async function(){
-  // Check for password reset token in URL hash
-  var hash=window.location.hash;
-  if(hash&&hash.includes('access_token')&&hash.includes('type=recovery')){
-    var params=new URLSearchParams(hash.replace('#',''));
-    var token=params.get('access_token');
-    if(token){
-      resetToken=token;
-      document.getElementById('auth-wrap').classList.add('show');
-      showTab('reset');
-      showAlert('Enter your new password below.','success');
-      // Clean URL
-      history.replaceState(null,'',window.location.pathname);
-      return;
-    }
-  }
-
-  // Restore existing session
   var saved=localStorage.getItem('budget_session');
   if(!saved){document.getElementById('auth-wrap').classList.add('show');return;}
   try{
     var session=JSON.parse(saved);
-    // Try to refresh the token
     if(session.refresh_token){
       try{
         var refreshed=await authRefresh(session.refresh_token);
