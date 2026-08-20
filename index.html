@@ -393,17 +393,23 @@ async function sbPatch(t,q,d){var r=await fetch(SB_URL+'/rest/v1/'+t+'?'+q,{meth
 async function sbDel(t,q){var r=await fetch(SB_URL+'/rest/v1/'+t+'?'+q,{method:'DELETE',headers:sbH(_authToken)});if(!r.ok)throw new Error(await r.text());}
 
 // Supabase Auth API
+function authErrMsg(d){
+  if(!d)return'Request failed';
+  if(typeof d.error==='string')return d.error_description||d.msg||d.error;
+  if(d.error&&d.error.message)return d.error.message;
+  return d.msg||d.error_description||JSON.stringify(d.error||d);
+}
 async function authSignUp(email,pw){
   var r=await fetch(SB_URL+'/auth/v1/signup',{method:'POST',headers:sbH(),body:JSON.stringify({email:email,password:pw})});
-  var d=await r.json();if(d.error)throw new Error(d.error.message||d.msg||JSON.stringify(d.error));return d;
+  var d=await r.json();if(!r.ok||d.error)throw new Error(authErrMsg(d));return d;
 }
 async function authSignIn(email,pw){
   var r=await fetch(SB_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:sbH(),body:JSON.stringify({email:email,password:pw})});
-  var d=await r.json();if(d.error)throw new Error(d.error.message||d.msg||JSON.stringify(d.error));return d;
+  var d=await r.json();if(!r.ok||d.error||!d.user)throw new Error(authErrMsg(d));return d;
 }
 async function authRefresh(refreshToken){
   var r=await fetch(SB_URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:sbH(),body:JSON.stringify({refresh_token:refreshToken})});
-  var d=await r.json();if(d.error)throw new Error(d.error.message);return d;
+  var d=await r.json();if(!r.ok||d.error||!d.user)throw new Error(authErrMsg(d));return d;
 }
 
 var currentUser=null,entries=[],budget={},editId=null,delId=null,entryTab='income';
@@ -444,7 +450,7 @@ async function doLogin(){
     setBtn('l-btn','l-spin','l-lbl',false,'Log In');
     loginUser({id:data.user.id,email:data.user.email});
   }catch(e){
-    showAlert(e.message.includes('Invalid')?'Incorrect email or password.':'Error: '+e.message,'error');
+    showAlert(/invalid/i.test(e.message)?'Incorrect email or password.':(/confirm/i.test(e.message)?'Please confirm your email before logging in.':'Error: '+e.message),'error');
     setBtn('l-btn','l-spin','l-lbl',false,'Log In');
   }
 }
