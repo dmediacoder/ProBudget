@@ -575,10 +575,7 @@ async function saveEntry(){
       toast2((entryTab==='income'?'Income':'Expense')+' saved','#34d399');
     }
     clearEntryForm();renderEntries();renderDashboard();updateNavBal();
-  }catch(e){toast2('Could not save. Try again.','#f87171');}
-}
-
-function cancelEdit(){editId=null;clearEntryForm();document.getElementById('form-title').textContent='New Entry';}
+  }catch(e){toast2('Save failed: '+e.message.slice(0,120),'#f87171');console.error('Save entry error:',e.message);}editId=null;clearEntryForm();document.getElementById('form-title').textContent='New Entry';}
 function clearEntryForm(){
   document.getElementById('f-cat').value='';document.getElementById('f-amt').value='';document.getElementById('f-freq').value='monthly';document.getElementById('f-desc').value='';
   document.getElementById('e-cat').classList.remove('show');document.getElementById('f-cat').classList.remove('err');
@@ -643,7 +640,8 @@ async function saveBudget(){
   try{
     for(var i=0;i<CATS.length;i++){
       var cat=CATS[i],amt=budget[cat]||0;
-      await fetch(SB_URL+'/rest/v1/budget_plans',{method:'POST',headers:{...sbH(),'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({user_id:currentUser.id,category:cat,planned_amount:amt})});
+      var bpRes=await fetch(SB_URL+'/rest/v1/budget_plans',{method:'POST',headers:{...sbH(_authToken),'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({user_id:currentUser.id,category:cat,planned_amount:amt})});
+      if(!bpRes.ok)throw new Error(await bpRes.text());
     }
     toast2('Budget saved','#34d399');renderDashboard();setTimeout(function(){goTo('dashboard');},600);
   }catch(e){toast2('Could not save budget.','#f87171');}
