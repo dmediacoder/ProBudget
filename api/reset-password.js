@@ -26,14 +26,33 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Look up the user by email using the admin API
-    const lookupRes = await fetch(
-      `${SB_URL}/auth/v1/admin/users?email=${encodeURIComponent(email.trim().toLowerCase())}`,
-      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
-    );
-    const lookupData = await lookupRes.json();
-    const users = Array.isArray(lookupData) ? lookupData : (lookupData.users || []);
-    const user = users[0];
+    // 1. Look up the user by email — search the admin user list directly
+    //    rather than relying on the ?email= query filter, since not all
+    //    Supabase project versions support server-side email filtering on
+    //    this endpoint (some silently ignore it and return all users).
+    const targetEmail = email.trim().toLowerCase();
+    let user = null;
+    let page = 1;
+    const perPage = 1000;
+
+    while (!user) {
+      const lookupRes = await fetch(
+        `${SB_URL}/auth/v1/admin/users?page=${page}&per_page=${perPage}`,
+        { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
+      );
+      if (!lookupRes.ok) {
+        const errText = await lookupRes.text();
+        return res.status(500).json({ error: 'Could not look up account: ' + errText });
+      }
+      const lookupData = await lookupRes.json();
+      const pageUsers = Array.isArray(lookupData) ? lookupData : (lookupData.users || []);
+
+      user = pageUsers.find(u => (u.email || '').toLowerCase() === targetEmail) || null;
+
+      if (user || pageUsers.length < perPage) break; // found it, or no more pages
+      page++;
+      if (page > 20) break; // safety cap (20,000 users) to avoid an infinite loop
+    }
 
     if (!user || !user.id) {
       // Same generic response whether or not the account exists, to avoid
