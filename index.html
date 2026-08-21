@@ -515,8 +515,8 @@ async function doForgot(){
 async function ensureBudgetUser(u){
   try{
     var r=await fetch(SB_URL+'/rest/v1/budget_users',{method:'POST',headers:{...sbH(_authToken),'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({id:u.id,email:u.email})});
-    if(!r.ok)console.error('ensureBudgetUser failed:',await r.text());
-  }catch(e){console.error('ensureBudgetUser error:',e.message);}
+    if(!r.ok){var t=await r.text();console.error('ensureBudgetUser failed:',t);toast2('Setup issue: '+t.slice(0,150),'#f87171');}
+  }catch(e){console.error('ensureBudgetUser error:',e.message);toast2('Setup issue: '+e.message.slice(0,150),'#f87171');}
 }
 
 async function loginUser(u){
