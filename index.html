@@ -512,11 +512,19 @@ async function doForgot(){
   }
 }
 
+async function ensureBudgetUser(u){
+  try{
+    var r=await fetch(SB_URL+'/rest/v1/budget_users',{method:'POST',headers:{...sbH(_authToken),'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({id:u.id,email:u.email})});
+    if(!r.ok)console.error('ensureBudgetUser failed:',await r.text());
+  }catch(e){console.error('ensureBudgetUser error:',e.message);}
+}
+
 async function loginUser(u){
   currentUser=u;entries=[];budget={};editId=null;patternMap={};
   loadPatterns();
   document.getElementById('auth-wrap').style.display='none';
   document.getElementById('app-wrap').classList.add('show');
+  await ensureBudgetUser(u);
   try{
     var dbE=await sbGet('budget_entries','user_id=eq.'+u.id+'&select=*&order=created_at.asc');
     entries=dbE.map(function(e){return{id:e.id,type:e.type,category:e.category,amount:parseFloat(e.amount),frequency:e.frequency,description:e.description||''};});
