@@ -943,16 +943,28 @@ document.getElementById('goal-del-modal').addEventListener('click',function(e){i
 document.getElementById('reset-modal').addEventListener('click',function(e){if(e.target===this)closeResetModal();});
 
 // ── BUDGET RESET & HISTORY ──
+function computeCategoryBreakdown(){
+  return CATS.map(function(c){
+    var actual=entries.filter(function(e){return e.type==='expense'&&e.category===c;}).reduce(function(s,e){return s+e.amount;},0);
+    var planned=budget[c]||0;
+    if(!actual&&!planned)return null;
+    var remaining=planned-actual;
+    var status=planned>0?(actual>=planned?'Over Budget':actual/planned>=0.8?'Approaching Limit':'On Track'):'No Budget Set';
+    return{cat:c,planned:planned,actual:actual,remaining:remaining,status:status};
+  }).filter(Boolean).sort(function(a,b){return b.actual-a.actual;});
+}
+
 function computePeriodSummary(){
   var income=entries.filter(function(e){return e.type==='income';}).reduce(function(s,e){return s+e.amount;},0);
   var spending=entries.filter(function(e){return e.type==='expense';}).reduce(function(s,e){return s+e.amount;},0);
   var savings=entries.filter(function(e){return e.category==='Savings';}).reduce(function(s,e){return s+e.amount;},0);
   var remaining=income-spending;
-  var top=CATS.map(function(c){return{cat:c,amt:entries.filter(function(e){return e.type==='expense'&&e.category===c;}).reduce(function(s,e){return s+e.amount;},0)};}).filter(function(x){return x.amt>0;}).sort(function(a,b){return b.amt-a.amt;}).slice(0,3);
+  var breakdown=computeCategoryBreakdown();
+  var top=breakdown.slice(0,3).map(function(x){return{cat:x.cat,amt:x.actual};});
   var planned=CATS.reduce(function(s,c){return s+(budget[c]||0);},0);
   var pct=planned>0?Math.round(spending/planned*100):0;
   var health=pct>=100?'Over Budget':pct>=80?'Approaching Limit':'On Track';
-  return{income:income,spending:spending,savings:savings,remaining:remaining,top:top,health:health};
+  return{income:income,spending:spending,savings:savings,remaining:remaining,top:top,breakdown:breakdown,health:health};
 }
 
 function openResetReview(){
@@ -973,7 +985,7 @@ async function confirmResetBudget(){
   var s=_resetSummaryCache||computePeriodSummary();
   var oldPeriod=currentPeriod;
   try{
-    await sbPost('budget_periods',{user_id:currentUser.id,period:oldPeriod,total_income:s.income,total_spending:s.spending,total_savings:s.savings,remaining:s.remaining,top_categories:s.top,health_status:s.health});
+    await sbPost('budget_periods',{user_id:currentUser.id,period:oldPeriod,total_income:s.income,total_spending:s.spending,total_savings:s.savings,remaining:s.remaining,top_categories:s.top,category_breakdown:s.breakdown,health_status:s.health});
     var newPeriod=nextMonthStr(oldPeriod);
     await sbPatch('budget_users','id=eq.'+currentUser.id,{active_period:newPeriod});
     var oldBudget=Object.assign({},budget);
@@ -1000,7 +1012,7 @@ async function renderBudgetHistory(){
     if(!rows.length){el.innerHTML='<div class="empty-state"><div class="ei">🗓️</div><h2>No history yet</h2><p>Once you reset your budget for a new month, past months will appear here.</p></div>';return;}
     el.innerHTML=rows.map(function(r,idx){
       var healthClass=r.health_status==='Over Budget'?'pill-over':r.health_status==='Approaching Limit'?'pill-warn':'pill-ok';
-      var top=r.top_categories||[];
+      var bd=r.category_breakdown||[];
       return'<div class="card"><div class="card-head" style="cursor:pointer" onclick="toggleHistoryItem('+idx+')"><div class="card-title">'+monthLabel(r.period)+'</div><span class="status-pill '+healthClass+'">'+r.health_status+'</span></div>'
         +'<div class="card-body" id="hist-body-'+idx+'" style="display:none">'
         +'<div class="summary-row" style="grid-template-columns:repeat(2,1fr)">'
@@ -1009,8 +1021,14 @@ async function renderBudgetHistory(){
         +'<div class="sum-card" style="box-shadow:none;border:1px solid #f3f4f6"><div class="sum-card-label">Savings</div><div class="sum-card-val warn">'+fmt(r.total_savings)+'</div></div>'
         +'<div class="sum-card" style="box-shadow:none;border:1px solid #f3f4f6"><div class="sum-card-label">Remaining</div><div class="sum-card-val '+(r.remaining>=0?'pos':'neg')+'">'+fmt(r.remaining)+'</div></div>'
         +'</div>'
-        +'<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Top Categories</div>'
-        +(top.length?top.map(function(t){return'<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6"><span>'+(ICONS[t.cat]||'')+' '+t.cat+'</span><span style="font-weight:700">'+fmt(t.amt)+'</span></div>';}).join(''):'<p style="color:#9ca3af;font-size:13px">No spending recorded.</p>')
+        +'<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Category Breakdown</div>'
+        +(bd.length?bd.map(function(x){
+          var pc=x.status==='Over Budget'?'pill-over':x.status==='Approaching Limit'?'pill-warn':x.status==='No Budget Set'?'pill-warn':'pill-ok';
+          return'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6">'
+            +'<div style="display:flex;align-items:center;gap:8px"><span>'+(ICONS[x.cat]||'')+'</span><span style="font-size:13px;font-weight:600">'+x.cat+'</span></div>'
+            +'<div style="text-align:right"><div style="font-size:12px;color:#6b7280">Planned '+fmt(x.planned)+' · Actual '+fmt(x.actual)+'</div><span class="status-pill '+pc+'" style="margin-top:2px;display:inline-block">'+x.status+'</span></div>'
+          +'</div>';
+        }).join(''):(r.top_categories&&r.top_categories.length?r.top_categories.map(function(t){return'<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6"><span>'+(ICONS[t.cat]||'')+' '+t.cat+'</span><span style="font-weight:700">'+fmt(t.amt)+'</span></div>';}).join(''):'<p style="color:#9ca3af;font-size:13px">No category data recorded.</p>'))
         +'</div></div></div>';
     }).join('');
   }catch(e){el.innerHTML='<p style="text-align:center;color:#f87171;padding:20px">Could not load history.</p>';}
