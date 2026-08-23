@@ -530,6 +530,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 var SB_URL='https://opntstuzymdqkcddfjfn.supabase.co';
@@ -1124,14 +1125,14 @@ function buildReportData(){
     var totalActual=entries.filter(function(e){return e.type==='expense';}).reduce(function(s,e){return s+e.amount;},0);
     var totalPlanned=CATS.reduce(function(s,c){return s+(budget[c]||0);},0);
     var savingsAmt=entries.filter(function(e){return e.type==='expense'&&e.category==='Savings';}).reduce(function(s,e){return s+e.amount;},0);
-    d={period:reportPeriod,income:income,totalPlanned:totalPlanned,totalActual:totalActual,savingsAmt:savingsAmt,bd:bd,hasBreakdown:true};
+    d={period:reportPeriod,income:income,totalPlanned:totalPlanned,totalActual:totalActual,savingsAmt:savingsAmt,bd:bd,hasBreakdown:true,topFallback:[]};
   }else{
     var row=(reportPeriodsCache||[]).find(function(r){return r.period===reportPeriod;});
     if(row){
       var bd2=(row.category_breakdown&&row.category_breakdown.length)?row.category_breakdown:null;
       var totalPlanned2=bd2?bd2.reduce(function(s,x){return s+(x.planned||0);},0):null;
       var savingsAmt2=bd2?((bd2.find(function(x){return x.cat==='Savings';})||{}).actual||0):row.total_savings;
-      d={period:reportPeriod,income:row.total_income,totalPlanned:totalPlanned2,totalActual:row.total_spending,savingsAmt:savingsAmt2,bd:bd2||[],hasBreakdown:!!bd2};
+      d={period:reportPeriod,income:row.total_income,totalPlanned:totalPlanned2,totalActual:row.total_spending,savingsAmt:savingsAmt2,bd:bd2||[],hasBreakdown:!!bd2,topFallback:row.top_categories||[]};
     }else{
       d={period:reportPeriod,income:0,totalPlanned:0,totalActual:0,savingsAmt:0,bd:[],hasBreakdown:false};
     }
@@ -1153,7 +1154,11 @@ function renderReportContent(){
 
   var cat=document.getElementById('report-category').value;
   var el=document.getElementById('report-cats');
-  if(!d.hasBreakdown){el.innerHTML='<p style="color:#9ca3af;font-size:13px;text-align:center;padding:16px">Detailed category breakdown isn\'t available for this month.</p>';return;}
+  if(!d.hasBreakdown){
+    el.innerHTML='<p style="color:#9ca3af;font-size:12.5px;margin-bottom:10px">Full planned-vs-actual detail wasn\'t saved for this month — showing the limited data that was recorded:</p>'
+      +(d.topFallback.length?d.topFallback.map(function(t){return'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6"><span>'+(ICONS[t.cat]||'')+' '+t.cat+'</span><span style="font-weight:700">'+fmt(t.amt)+'</span></div>';}).join(''):'<p style="color:#9ca3af;font-size:13px;text-align:center;padding:16px">No category data available for this month.</p>');
+    return;
+  }
   var rows=d.bd.filter(function(x){return cat==='all'||x.cat===cat;});
   if(!rows.length){el.innerHTML='<p style="color:#9ca3af;font-size:13px;text-align:center;padding:16px">No category data for this selection.</p>';return;}
   var maxVal=Math.max.apply(null,rows.map(function(x){return Math.max(x.planned,x.actual);}).concat([1]));
@@ -1178,21 +1183,53 @@ function exportReportPDF(){
     var y=20;
     doc.setFontSize(16);doc.text('Budget Report',14,y);y+=8;
     doc.setFontSize(11);doc.setTextColor(90);doc.text(monthLabel(d.period),14,y);y+=6;
-    doc.setFontSize(9);doc.text('Generated '+new Date().toLocaleDateString('en-GB'),14,y);y+=12;
-    doc.setTextColor(0);doc.setFontSize(12);
-    doc.text('Income: '+fmt(d.income),14,y);y+=7;
-    doc.text('Planned Spending: '+(d.totalPlanned!==null?fmt(d.totalPlanned):'N/A'),14,y);y+=7;
-    doc.text('Actual Spending: '+fmt(d.totalActual),14,y);y+=7;
-    doc.text('Savings Progress: '+fmt(d.savingsAmt),14,y);y+=12;
-    doc.setFontSize(13);doc.text('Category Details',14,y);y+=8;
-    doc.setFontSize(10);
-    if(!d.bd.length){doc.text('No category data available.',14,y);}
-    d.bd.forEach(function(x){
-      if(y>275){doc.addPage();y=20;}
-      var diff=x.planned-x.actual;
-      var line=x.cat+':  Planned '+fmt(x.planned)+'   Actual '+fmt(x.actual)+'   '+(diff<0?'Over by '+fmt(Math.abs(diff)):'Under by '+fmt(diff));
-      doc.text(line,14,y);y+=7;
+    doc.setFontSize(9);doc.text('Generated '+new Date().toLocaleDateString('en-GB'),14,y);y+=8;
+    doc.setTextColor(0);
+
+    doc.autoTable({
+      startY:y,
+      head:[['Income','Planned Spending','Actual Spending','Savings Progress']],
+      body:[[fmt(d.income),(d.totalPlanned!==null?fmt(d.totalPlanned):'N/A'),fmt(d.totalActual),fmt(d.savingsAmt)]],
+      theme:'grid',
+      styles:{fontSize:10,halign:'center',cellPadding:5},
+      headStyles:{fillColor:[17,24,39],fontStyle:'bold'}
     });
+    y=doc.lastAutoTable.finalY+12;
+
+    doc.setFontSize(13);doc.text('Category Details',14,y);
+
+    if(d.hasBreakdown&&d.bd.length){
+      doc.autoTable({
+        startY:y+5,
+        head:[['Category','Planned','Actual','Difference']],
+        body:d.bd.map(function(x){
+          var diff=x.planned-x.actual;
+          return[x.cat,fmt(x.planned),fmt(x.actual),(diff<0?'Over by '+fmt(Math.abs(diff)):'Under by '+fmt(diff))];
+        }),
+        theme:'striped',
+        styles:{fontSize:10,cellPadding:4},
+        headStyles:{fillColor:[17,24,39],fontStyle:'bold'},
+        didParseCell:function(data){
+          if(data.section==='body'&&data.column.index===3&&typeof data.cell.raw==='string'){
+            data.cell.styles.textColor=data.cell.raw.indexOf('Over')===0?[220,38,38]:[5,150,105];
+            data.cell.styles.fontStyle='bold';
+          }
+        }
+      });
+    }else if(d.topFallback&&d.topFallback.length){
+      doc.setFontSize(9);doc.setTextColor(120);doc.text('Full planned-vs-actual detail was not saved for this month.',14,y+7);doc.setTextColor(0);
+      doc.autoTable({
+        startY:y+12,
+        head:[['Category','Amount']],
+        body:d.topFallback.map(function(t){return[t.cat,fmt(t.amt)];}),
+        theme:'striped',
+        styles:{fontSize:10,cellPadding:4},
+        headStyles:{fillColor:[17,24,39],fontStyle:'bold'}
+      });
+    }else{
+      doc.setFontSize(10);doc.text('No category data available.',14,y+10);
+    }
+
     doc.save('budget-report-'+d.period+'.pdf');
   }catch(e){toast2('Could not export PDF: '+e.message.slice(0,100),'#f87171');}
 }
