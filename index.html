@@ -392,6 +392,10 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
       </div>
       <div class="card-body">
         <p style="font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px" id="budget-period-label"></p>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+          <input type="month" id="switch-month-input" style="flex:1;padding:9px 10px;border:1.5px solid #e5e7eb;border-radius:9px;font-family:inherit;font-size:13px;color:#111827"/>
+          <button class="btn-cancel" style="font-size:12px;padding:9px 14px;white-space:nowrap" onclick="switchToMonth()">Go to Month</button>
+        </div>
         <p style="font-size:13px;color:#6b7280;margin-bottom:20px;line-height:1.6">Set a monthly spending limit for each category.</p>
         <div class="budget-grid" id="bgt-fields"></div>
         <button class="btn-primary" style="width:100%;margin-top:16px;justify-content:center" onclick="saveBudget()">Save Budget</button>
@@ -673,6 +677,30 @@ async function ensureBudgetUser(u){
   }catch(e){console.error('ensureBudgetUser error:',e.message);toast2('Setup issue: '+e.message.slice(0,150),'#f87171');}
 }
 
+async function reloadCurrentPeriodData(){
+  entries=[];budget={};
+  try{
+    var dbE=await sbGet('budget_entries','user_id=eq.'+currentUser.id+'&period=eq.'+currentPeriod+'&select=*&order=created_at.asc');
+    entries=dbE.map(function(e){return{id:e.id,type:e.type,category:e.category,amount:parseFloat(e.amount),frequency:e.frequency,description:e.description||''};});
+    entries.filter(function(e){return e.type==='expense'&&e.description;}).forEach(function(e){learnPattern(e.description,e.category);});
+    var dbB=await sbGet('budget_plans','user_id=eq.'+currentUser.id+'&period=eq.'+currentPeriod+'&select=*');
+    dbB.forEach(function(b){budget[b.category]=parseFloat(b.planned_amount);});
+  }catch(e){console.error('Load error',e);}
+}
+
+async function switchToMonth(){
+  var val=document.getElementById('switch-month-input').value;
+  if(!val)return;
+  if(val===currentPeriod){toast2('Already viewing '+monthLabel(val),'#6366f1');return;}
+  try{
+    await sbPatch('budget_users','id=eq.'+currentUser.id,{active_period:val});
+    currentPeriod=val;
+    await reloadCurrentPeriodData();
+    renderEntries();renderDashboard();renderBudgetForm();updateNavBal();
+    toast2('Switched to '+monthLabel(val),'#34d399');
+  }catch(e){toast2('Could not switch month: '+e.message.slice(0,100),'#f87171');}
+}
+
 async function loginUser(u){
   currentUser=u;entries=[];budget={};editId=null;patternMap={};
   loadPatterns();
@@ -684,13 +712,8 @@ async function loginUser(u){
     currentPeriod=(bu&&bu[0]&&bu[0].active_period)||currentMonthStr();
     openingBalance=(bu&&bu[0]&&parseFloat(bu[0].opening_balance))||0;
   }catch(e){currentPeriod=currentMonthStr();}
+  await reloadCurrentPeriodData();
   try{
-    var dbE=await sbGet('budget_entries','user_id=eq.'+u.id+'&period=eq.'+currentPeriod+'&select=*&order=created_at.asc');
-    entries=dbE.map(function(e){return{id:e.id,type:e.type,category:e.category,amount:parseFloat(e.amount),frequency:e.frequency,description:e.description||''};});
-    // Learn patterns from existing entries
-    entries.filter(function(e){return e.type==='expense'&&e.description;}).forEach(function(e){learnPattern(e.description,e.category);});
-    var dbB=await sbGet('budget_plans','user_id=eq.'+u.id+'&period=eq.'+currentPeriod+'&select=*');
-    dbB.forEach(function(b){budget[b.category]=parseFloat(b.planned_amount);});
     var dbS=await sbGet('savings_goals','user_id=eq.'+u.id+'&select=*&order=created_at.asc');
     savingsGoals=dbS.map(function(g){return{id:g.id,name:g.name,target_amount:parseFloat(g.target_amount),current_amount:parseFloat(g.current_amount||0),target_date:g.target_date,achieved:!!g.achieved};});
   }catch(e){console.error('Load error',e);}
@@ -801,6 +824,7 @@ function renderList(id,list,type){
 
 function renderBudgetForm(){
   var lbl=document.getElementById('budget-period-label');if(lbl)lbl.textContent='Planning for: '+monthLabel(currentPeriod||currentMonthStr());
+  var mi=document.getElementById('switch-month-input');if(mi&&!mi.value)mi.value=currentPeriod||currentMonthStr();
   document.getElementById('bgt-fields').innerHTML=CATS.map(function(c){
     return '<div class="field"><label>'+(ICONS[c]||'')+'  '+c+'</label><input type="text" id="b-'+c+'" placeholder="0.00" value="'+(budget[c]||'')+'" inputmode="decimal"/></div>';
   }).join('');
