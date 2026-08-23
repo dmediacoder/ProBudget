@@ -524,7 +524,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
     <p style="font-size:12.5px;color:#6b7280;margin:16px 0 4px;line-height:1.5">Starting a new month keeps your budget categories so you can adjust them, and gives you a fresh Income & Expenses list. This month's data is saved to Budget History.</p>
     <div class="modal-btns" style="margin-top:14px">
       <button style="background:#f3f4f6;color:#374151" onclick="closeResetModal()">Cancel</button>
-      <button style="background:#111827;color:#fff" onclick="confirmResetBudget()">Start New Month</button>
+      <button style="background:#111827;color:#fff" id="reset-confirm-btn" onclick="confirmResetBudget()">Start New Month</button>
     </div>
   </div>
 </div>
@@ -562,7 +562,7 @@ async function authRefresh(refreshToken){
   var d=await r.json();if(!r.ok||d.error||!d.user)throw new Error(authErrMsg(d));return d;
 }
 
-var currentUser=null,entries=[],budget={},editId=null,delId=null,entryTab='income',savingsGoals=[],contribGoalId=null,goalDelId=null,currentPeriod=null,_resetSummaryCache=null,openingBalance=0,reportPeriod=null,reportPeriodsCache=null,_reportDataCache=null;
+var currentUser=null,entries=[],budget={},editId=null,delId=null,entryTab='income',savingsGoals=[],contribGoalId=null,goalDelId=null,currentPeriod=null,_resetSummaryCache=null,openingBalance=0,reportPeriod=null,reportPeriodsCache=null,_reportDataCache=null,_resetInProgress=false;
 function currentMonthStr(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function nextMonthStr(p){var parts=p.split('-');var y=parseInt(parts[0],10),m=parseInt(parts[1],10);m++;if(m>12){m=1;y++;}return y+'-'+String(m).padStart(2,'0');}
 function monthLabel(p){var parts=p.split('-');var y=parseInt(parts[0],10),m=parseInt(parts[1],10)-1;var d=new Date(y,m,1);return d.toLocaleString('en-GB',{month:'long',year:'numeric'});}
@@ -1033,9 +1033,13 @@ function openResetReview(){
   document.getElementById('reset-top-cats').innerHTML=s.top.length?s.top.map(function(t){return'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6"><span>'+(ICONS[t.cat]||'')+' '+t.cat+'</span><span style="font-weight:700">'+fmt(t.amt)+'</span></div>';}).join(''):'<p style="color:#9ca3af;font-size:13px">No spending recorded this month.</p>';
   document.getElementById('reset-modal').classList.add('open');
 }
-function closeResetModal(){document.getElementById('reset-modal').classList.remove('open');}
+function closeResetModal(){document.getElementById('reset-modal').classList.remove('open');var btn=document.getElementById('reset-confirm-btn');if(btn){btn.disabled=false;btn.textContent='Start New Month';}}
 
 async function confirmResetBudget(){
+  if(_resetInProgress)return;
+  _resetInProgress=true;
+  var btn=document.getElementById('reset-confirm-btn');
+  if(btn){btn.disabled=true;btn.textContent='Starting new month...';}
   var s=_resetSummaryCache||computePeriodSummary();
   var oldPeriod=currentPeriod;
   try{
@@ -1057,6 +1061,10 @@ async function confirmResetBudget(){
     goTo('budget');
     toast2('New month started: '+monthLabel(newPeriod),'#34d399');
   }catch(e){toast2('Could not reset budget: '+e.message.slice(0,100),'#f87171');}
+  finally{
+    _resetInProgress=false;
+    if(btn){btn.disabled=false;btn.textContent='Start New Month';}
+  }
 }
 
 async function renderBudgetHistory(){
