@@ -1067,18 +1067,34 @@ async function confirmResetBudget(){
   if(btn){btn.disabled=true;btn.textContent='Starting new month...';}
   var s=_resetSummaryCache||computePeriodSummary();
   var oldPeriod=currentPeriod;
+  var newPeriod=nextMonthStr(oldPeriod);
   try{
-    await sbPost('budget_periods',{user_id:currentUser.id,period:oldPeriod,total_income:s.income,total_spending:s.spending,total_savings:s.savings,remaining:s.remaining,top_categories:s.top,category_breakdown:s.breakdown,health_status:s.health});
-    var newPeriod=nextMonthStr(oldPeriod);
-    await sbPatch('budget_users','id=eq.'+currentUser.id,{active_period:newPeriod,opening_balance:s.remaining});
-    openingBalance=s.remaining;
+    // 1. Carry forward budget categories into the new month FIRST.
+    //    Uses check-then-update/insert so it's safe to retry without
+    //    creating duplicates if this ever partially fails.
     var oldBudget=Object.assign({},budget);
     for(var i=0;i<CATS.length;i++){
       var cat=CATS[i];
       if(oldBudget[cat]>0){
-        await sbPost('budget_plans',{user_id:currentUser.id,category:cat,planned_amount:oldBudget[cat],period:newPeriod});
+        var existingPlan=await sbGet('budget_plans','user_id=eq.'+currentUser.id+'&category=eq.'+encodeURIComponent(cat)+'&period=eq.'+newPeriod+'&select=id');
+        if(existingPlan&&existingPlan.length){
+          await sbPatch('budget_plans','id=eq.'+existingPlan[0].id,{planned_amount:oldBudget[cat]});
+        }else{
+          await sbPost('budget_plans',{user_id:currentUser.id,category:cat,planned_amount:oldBudget[cat],period:newPeriod});
+        }
       }
     }
+    // 2. Save (or update, if retrying) the snapshot of the month being closed.
+    var existingSnap=await sbGet('budget_periods','user_id=eq.'+currentUser.id+'&period=eq.'+oldPeriod+'&select=id');
+    if(existingSnap&&existingSnap.length){
+      await sbPatch('budget_periods','id=eq.'+existingSnap[0].id,{total_income:s.income,total_spending:s.spending,total_savings:s.savings,remaining:s.remaining,top_categories:s.top,category_breakdown:s.breakdown,health_status:s.health});
+    }else{
+      await sbPost('budget_periods',{user_id:currentUser.id,period:oldPeriod,total_income:s.income,total_spending:s.spending,total_savings:s.savings,remaining:s.remaining,top_categories:s.top,category_breakdown:s.breakdown,health_status:s.health});
+    }
+    // 3. ONLY now that everything above has succeeded, move the pointer forward.
+    //    This is what guarantees the database and the screen can never disagree.
+    await sbPatch('budget_users','id=eq.'+currentUser.id,{active_period:newPeriod,opening_balance:s.remaining});
+    openingBalance=s.remaining;
     currentPeriod=newPeriod;
     entries=[];
     closeResetModal();
