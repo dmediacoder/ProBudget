@@ -295,6 +295,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
       <button class="nav-tab" onclick="goTo('savings')">Savings Goals</button>
       <button class="nav-tab" onclick="goTo('history')">Budget History</button>
       <button class="nav-tab" onclick="goTo('report')">Spending Report</button>
+      <button class="nav-tab" onclick="goTo('reflection')">Reflection</button>
     </div>
     <div class="nav-right">
       <div class="nav-balance pos" id="nav-bal">£0.00</div>
@@ -473,6 +474,24 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
       </div>
     </div>
   </div>
+
+  <!-- MONTHLY REFLECTION -->
+  <div class="page" id="page-reflection">
+    <div class="card" style="max-width:640px;margin:0 auto 16px">
+      <div class="card-head"><div class="card-title" id="reflection-period-title">Monthly Reflection</div></div>
+      <div class="card-body">
+        <div class="field">
+          <label>Your reflection for this month</label>
+          <textarea id="reflection-text" rows="6" placeholder="How did this month go? What worked, what didn't, what will you try next month?" style="width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;color:#111827;resize:vertical;outline:none"></textarea>
+        </div>
+        <button class="btn-primary" style="width:100%;justify-content:center" onclick="saveReflection()">Save Reflection</button>
+      </div>
+    </div>
+    <div style="max-width:640px;margin:0 auto">
+      <div style="font-size:12px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin:0 0 10px 4px">Previous Reflections</div>
+      <div id="reflections-list"></div>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"><span class="tdot" id="tdot"></span><span id="tmsg">Saved</span></div>
@@ -567,7 +586,7 @@ async function authRefresh(refreshToken){
   var d=await r.json();if(!r.ok||d.error||!d.user)throw new Error(authErrMsg(d));return d;
 }
 
-var currentUser=null,entries=[],budget={},editId=null,delId=null,entryTab='income',savingsGoals=[],contribGoalId=null,goalDelId=null,currentPeriod=null,_resetSummaryCache=null,openingBalance=0,reportPeriod=null,reportPeriodsCache=null,_reportDataCache=null,_resetInProgress=false;
+var currentUser=null,entries=[],budget={},editId=null,delId=null,entryTab='income',savingsGoals=[],contribGoalId=null,goalDelId=null,currentPeriod=null,_resetSummaryCache=null,openingBalance=0,reportPeriod=null,reportPeriodsCache=null,_reportDataCache=null,_resetInProgress=false,reflectionsCache=null;
 function currentMonthStr(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function nextMonthStr(p){var parts=p.split('-');var y=parseInt(parts[0],10),m=parseInt(parts[1],10);m++;if(m>12){m=1;y++;}return y+'-'+String(m).padStart(2,'0');}
 function monthLabel(p){var parts=p.split('-');var y=parseInt(parts[0],10),m=parseInt(parts[1],10)-1;var d=new Date(y,m,1);return d.toLocaleString('en-GB',{month:'long',year:'numeric'});}
@@ -732,13 +751,14 @@ async function doLogout(){
 function goTo(page){
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   document.getElementById('page-'+page).classList.add('active');
-  document.querySelectorAll('.nav-tab').forEach(function(t,i){t.classList.toggle('active',['dashboard','entries','budget','weekly','savings','history','report'][i]===page);});
+  document.querySelectorAll('.nav-tab').forEach(function(t,i){t.classList.toggle('active',['dashboard','entries','budget','weekly','savings','history','report','reflection'][i]===page);});
   if(page==='dashboard')renderDashboard();
   if(page==='budget')renderBudgetForm();
   if(page==='weekly')renderWeekly();
   if(page==='savings')renderSavingsGoals();
   if(page==='history')renderBudgetHistory();
   if(page==='report')renderReport();
+  if(page==='reflection')renderReflection();
 }
 
 function switchTab(tab){
@@ -1046,7 +1066,16 @@ function computePeriodSummary(){
   return{income:income,spending:spending,savings:savings,remaining:remaining,top:top,breakdown:breakdown,health:health};
 }
 
-function openResetReview(){
+async function openResetReview(){
+  try{
+    var freshBu=await sbGet('budget_users','id=eq.'+currentUser.id+'&select=active_period');
+    var trueOldPeriod=(freshBu&&freshBu[0]&&freshBu[0].active_period)||currentPeriod;
+    if(trueOldPeriod!==currentPeriod){
+      currentPeriod=trueOldPeriod;
+      await reloadCurrentPeriodData();
+      renderEntries();renderBudgetForm();
+    }
+  }catch(e){}
   var s=computePeriodSummary();_resetSummaryCache=s;
   document.getElementById('reset-month-label').textContent='Review '+monthLabel(currentPeriod);
   document.getElementById('reset-income').textContent=fmt(s.income);
@@ -1065,13 +1094,20 @@ async function confirmResetBudget(){
   _resetInProgress=true;
   var btn=document.getElementById('reset-confirm-btn');
   if(btn){btn.disabled=true;btn.textContent='Starting new month...';}
-  var s=_resetSummaryCache||computePeriodSummary();
-  var oldPeriod=currentPeriod;
-  var newPeriod=nextMonthStr(oldPeriod);
   try{
-    // 1. Carry forward budget categories into the new month FIRST.
-    //    Uses check-then-update/insert so it's safe to retry without
-    //    creating duplicates if this ever partially fails.
+    // Always trust the database over whatever the browser has cached —
+    // re-check the real current period right before making any changes.
+    var freshBu=await sbGet('budget_users','id=eq.'+currentUser.id+'&select=active_period');
+    var trueOldPeriod=(freshBu&&freshBu[0]&&freshBu[0].active_period)||currentPeriod;
+    if(trueOldPeriod!==currentPeriod){
+      currentPeriod=trueOldPeriod;
+      await reloadCurrentPeriodData();
+      renderEntries();renderBudgetForm();
+    }
+    var oldPeriod=currentPeriod;
+    var newPeriod=nextMonthStr(oldPeriod);
+    var s=computePeriodSummary();
+
     var oldBudget=Object.assign({},budget);
     for(var i=0;i<CATS.length;i++){
       var cat=CATS[i];
@@ -1084,15 +1120,12 @@ async function confirmResetBudget(){
         }
       }
     }
-    // 2. Save (or update, if retrying) the snapshot of the month being closed.
     var existingSnap=await sbGet('budget_periods','user_id=eq.'+currentUser.id+'&period=eq.'+oldPeriod+'&select=id');
     if(existingSnap&&existingSnap.length){
       await sbPatch('budget_periods','id=eq.'+existingSnap[0].id,{total_income:s.income,total_spending:s.spending,total_savings:s.savings,remaining:s.remaining,top_categories:s.top,category_breakdown:s.breakdown,health_status:s.health});
     }else{
       await sbPost('budget_periods',{user_id:currentUser.id,period:oldPeriod,total_income:s.income,total_spending:s.spending,total_savings:s.savings,remaining:s.remaining,top_categories:s.top,category_breakdown:s.breakdown,health_status:s.health});
     }
-    // 3. ONLY now that everything above has succeeded, move the pointer forward.
-    //    This is what guarantees the database and the screen can never disagree.
     await sbPatch('budget_users','id=eq.'+currentUser.id,{active_period:newPeriod,opening_balance:s.remaining});
     openingBalance=s.remaining;
     currentPeriod=newPeriod;
@@ -1284,6 +1317,47 @@ async function exportReportImage(){
     link.href=canvas.toDataURL('image/png');
     link.click();
   }catch(e){toast2('Could not export image: '+e.message.slice(0,100),'#f87171');}
+}
+
+// ── MONTHLY REFLECTION ──
+function escapeHtml(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+async function renderReflection(){
+  document.getElementById('reflection-period-title').textContent='Monthly Reflection — '+monthLabel(currentPeriod);
+  try{
+    var rows=await sbGet('budget_reflections','user_id=eq.'+currentUser.id+'&select=*&order=period.desc');
+    reflectionsCache=rows;
+    var current=rows.find(function(r){return r.period===currentPeriod;});
+    document.getElementById('reflection-text').value=current?current.reflection:'';
+    renderReflectionsList();
+  }catch(e){console.error('Could not load reflections',e);}
+}
+
+function renderReflectionsList(){
+  var el=document.getElementById('reflections-list');
+  var others=(reflectionsCache||[]).filter(function(r){return r.period!==currentPeriod;});
+  if(!others.length){el.innerHTML='<p style="color:#9ca3af;font-size:13px;text-align:center;padding:16px">No previous reflections yet.</p>';return;}
+  el.innerHTML=others.map(function(r){
+    return'<div class="card"><div class="card-body"><div style="font-size:12px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+monthLabel(r.period)+'</div><p style="font-size:13.5px;color:#374151;line-height:1.6;white-space:pre-wrap;margin:0">'+escapeHtml(r.reflection)+'</p></div></div>';
+  }).join('');
+}
+
+async function saveReflection(){
+  var text=document.getElementById('reflection-text').value.trim();
+  if(!text){toast2('Write something before saving','#f87171');return;}
+  try{
+    var existing=(reflectionsCache||[]).find(function(r){return r.period===currentPeriod;});
+    if(existing){
+      await sbPatch('budget_reflections','id=eq.'+existing.id,{reflection:text,updated_at:new Date().toISOString()});
+      existing.reflection=text;
+    }else{
+      var rows=await sbPost('budget_reflections',{user_id:currentUser.id,period:currentPeriod,reflection:text});
+      reflectionsCache=reflectionsCache||[];
+      reflectionsCache.unshift({id:rows[0].id,period:currentPeriod,reflection:text});
+    }
+    renderReflectionsList();
+    toast2('Reflection saved','#34d399');
+  }catch(e){toast2('Could not save reflection: '+e.message.slice(0,100),'#f87171');}
 }
 
 // ── SAVINGS GOALS ──
