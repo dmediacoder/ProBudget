@@ -125,6 +125,20 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
 .btn-del{background:#fef2f2;color:#ef4444}.btn-del:hover{background:#fee2e2}
 .empty-list{text-align:center;padding:28px;color:#9ca3af;font-size:12.5px}
 .budget-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.goal-card{background:#fff;border-radius:14px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px}
+.goal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
+.goal-name{font-size:15px;font-weight:800;color:#111827;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.goal-badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:#d1fae5;color:#065f46;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.goal-bar-wrap{width:100%;height:10px;background:#f3f4f6;border-radius:5px;overflow:hidden;margin:10px 0}
+.goal-bar{height:100%;border-radius:5px;transition:width .5s;background:linear-gradient(90deg,#6366f1,#818cf8)}
+.goal-bar.achieved{background:#34d399}
+.goal-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.goal-stat-label{font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
+.goal-stat-val{font-size:15px;font-weight:800;color:#111827}
+.goal-date{font-size:12px;color:#9ca3af}
+.goal-actions{display:flex;gap:8px;margin-top:14px}
+.goal-pct{font-size:13px;font-weight:800;color:#6366f1}
+@media(max-width:480px){.goal-stats{grid-template-columns:1fr 1fr}.goal-stats>div:last-child{grid-column:span 2}}
 .prompt-card{background:linear-gradient(135deg,#1e3a5f,#312e81);border-radius:14px;padding:18px 20px;margin-bottom:14px;color:#fff}
 .prompt-card h3{font-size:14px;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:8px}
 .prompt-card p{font-size:13px;color:rgba(255,255,255,.75);line-height:1.6;margin-bottom:12px}
@@ -262,6 +276,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
       <button class="nav-tab" onclick="goTo('entries')">Income & Expenses</button>
       <button class="nav-tab" onclick="goTo('budget')">Budget Setup</button>
       <button class="nav-tab" onclick="goTo('weekly')">Weekly Summary</button>
+      <button class="nav-tab" onclick="goTo('savings')">Savings Goals</button>
     </div>
     <div class="nav-right">
       <div class="nav-balance pos" id="nav-bal">£0.00</div>
@@ -367,6 +382,35 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
   <div class="page" id="page-weekly">
     <div id="weekly-content"></div>
   </div>
+
+  <!-- SAVINGS GOALS -->
+  <div class="page" id="page-savings">
+    <div class="card" style="max-width:560px;margin:0 auto 16px">
+      <div class="card-head"><div class="card-title">Savings Goals</div>
+        <button class="btn-primary" onclick="toggleGoalForm()" style="padding:7px 14px;font-size:12.5px">+ Create New Goal</button>
+      </div>
+      <div class="card-body" id="goal-form-wrap" style="display:none">
+        <div class="field"><label>Goal Name</label>
+          <input type="text" id="g-name" placeholder="e.g. Emergency Fund, New Laptop"/>
+          <div class="ferr" id="e-g-name">Enter a goal name</div></div>
+        <div class="field"><label>Target Amount (£)</label>
+          <input type="text" id="g-target" placeholder="0.00" inputmode="decimal"/>
+          <div class="ferr" id="e-g-target">Enter a valid amount greater than 0</div></div>
+        <div class="field"><label>Target Date <span style="font-weight:400;text-transform:none;font-size:11px;color:#9ca3af">(optional)</span></label>
+          <input type="date" id="g-date"/></div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn-primary" style="flex:1;justify-content:center" onclick="saveGoal()">Save Goal</button>
+          <button class="btn-cancel" onclick="toggleGoalForm(false)">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div id="goals-empty" class="empty-state" style="display:none">
+      <div class="ei">🎯</div><h2>No savings goals yet.</h2>
+      <p>Create a savings goal to start tracking your progress toward something you're saving for.</p>
+      <button class="btn-primary" onclick="toggleGoalForm(true)">Create New Goal</button>
+    </div>
+    <div id="goals-list" style="max-width:560px;margin:0 auto"></div>
+  </div>
 </div>
 
 <div class="toast" id="toast"><span class="tdot" id="tdot"></span><span id="tmsg">Saved</span></div>
@@ -377,6 +421,29 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
     <div class="modal-btns">
       <button style="background:#f3f4f6;color:#374151" onclick="closeModal()">Cancel</button>
       <button style="background:#ef4444;color:#fff" onclick="confirmDel()">Delete</button>
+    </div>
+  </div>
+</div>
+<div class="modal-ov" id="contrib-modal">
+  <div class="modal">
+    <h3>Add Contribution</h3>
+    <p id="contrib-goal-name">Add an amount toward this goal.</p>
+    <div class="field"><label>Amount (£)</label>
+      <input type="text" id="contrib-amt" placeholder="0.00" inputmode="decimal" onkeydown="if(event.key==='Enter')confirmContribution()"/>
+      <div class="ferr" id="e-contrib-amt">Enter a valid amount greater than 0</div></div>
+    <div class="modal-btns">
+      <button style="background:#f3f4f6;color:#374151" onclick="closeContribModal()">Cancel</button>
+      <button style="background:#111827;color:#fff" onclick="confirmContribution()">Add</button>
+    </div>
+  </div>
+</div>
+<div class="modal-ov" id="goal-del-modal">
+  <div class="modal">
+    <h3>Delete this goal?</h3>
+    <p>This removes the savings goal and all its contribution progress.</p>
+    <div class="modal-btns">
+      <button style="background:#f3f4f6;color:#374151" onclick="closeGoalDelModal()">Cancel</button>
+      <button style="background:#ef4444;color:#fff" onclick="confirmGoalDel()">Delete</button>
     </div>
   </div>
 </div>
@@ -412,7 +479,7 @@ async function authRefresh(refreshToken){
   var d=await r.json();if(!r.ok||d.error||!d.user)throw new Error(authErrMsg(d));return d;
 }
 
-var currentUser=null,entries=[],budget={},editId=null,delId=null,entryTab='income';
+var currentUser=null,entries=[],budget={},editId=null,delId=null,entryTab='income',savingsGoals=[],contribGoalId=null,goalDelId=null;
 var CATS=['Food','Shopping','Miscellaneous','Transport','Savings','Health'];
 var ICONS={Food:'🍽',Shopping:'🛍',Miscellaneous:'📦',Transport:'🚌',Savings:'💰',Health:'❤️'};
 var COLORS={Food:'#fef3c7',Shopping:'#ede9fe',Miscellaneous:'#f3f4f6',Transport:'#dbeafe',Savings:'#d1fae5',Health:'#fee2e2'};
@@ -532,6 +599,8 @@ async function loginUser(u){
     entries.filter(function(e){return e.type==='expense'&&e.description;}).forEach(function(e){learnPattern(e.description,e.category);});
     var dbB=await sbGet('budget_plans','user_id=eq.'+u.id+'&select=*');
     dbB.forEach(function(b){budget[b.category]=parseFloat(b.planned_amount);});
+    var dbS=await sbGet('savings_goals','user_id=eq.'+u.id+'&select=*&order=created_at.asc');
+    savingsGoals=dbS.map(function(g){return{id:g.id,name:g.name,target_amount:parseFloat(g.target_amount),current_amount:parseFloat(g.current_amount||0),target_date:g.target_date,achieved:!!g.achieved};});
   }catch(e){console.error('Load error',e);}
   goTo('dashboard');renderEntries();renderBudgetForm();
 }
@@ -548,10 +617,11 @@ async function doLogout(){
 function goTo(page){
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   document.getElementById('page-'+page).classList.add('active');
-  document.querySelectorAll('.nav-tab').forEach(function(t,i){t.classList.toggle('active',['dashboard','entries','budget','weekly'][i]===page);});
+  document.querySelectorAll('.nav-tab').forEach(function(t,i){t.classList.toggle('active',['dashboard','entries','budget','weekly','savings'][i]===page);});
   if(page==='dashboard')renderDashboard();
   if(page==='budget')renderBudgetForm();
   if(page==='weekly')renderWeekly();
+  if(page==='savings')renderSavingsGoals();
 }
 
 function switchTab(tab){
@@ -822,6 +892,99 @@ function chkStrength(pw){
 }
 
 document.getElementById('del-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+document.getElementById('contrib-modal').addEventListener('click',function(e){if(e.target===this)closeContribModal();});
+document.getElementById('goal-del-modal').addEventListener('click',function(e){if(e.target===this)closeGoalDelModal();});
+
+// ── SAVINGS GOALS ──
+function toggleGoalForm(show){
+  var el=document.getElementById('goal-form-wrap');
+  var willShow=(show!==undefined)?show:(el.style.display==='none');
+  el.style.display=willShow?'block':'none';
+  if(willShow){
+    document.getElementById('g-name').value='';document.getElementById('g-target').value='';document.getElementById('g-date').value='';
+    document.getElementById('e-g-name').classList.remove('show');document.getElementById('g-name').classList.remove('err');
+    document.getElementById('e-g-target').classList.remove('show');document.getElementById('g-target').classList.remove('err');
+  }
+}
+
+async function saveGoal(){
+  var name=document.getElementById('g-name').value.trim();
+  var targetS=document.getElementById('g-target').value.trim();
+  var target=parseFloat(targetS);
+  var date=document.getElementById('g-date').value||null;
+  var ok=true;
+  document.getElementById('e-g-name').classList.remove('show');document.getElementById('g-name').classList.remove('err');
+  document.getElementById('e-g-target').classList.remove('show');document.getElementById('g-target').classList.remove('err');
+  if(!name){document.getElementById('e-g-name').classList.add('show');document.getElementById('g-name').classList.add('err');ok=false;}
+  if(!targetS||isNaN(target)||target<=0){document.getElementById('e-g-target').classList.add('show');document.getElementById('g-target').classList.add('err');ok=false;}
+  if(!ok)return;
+  try{
+    var rows=await sbPost('savings_goals',{user_id:currentUser.id,name:name,target_amount:target,current_amount:0,target_date:date,achieved:false});
+    savingsGoals.push({id:rows[0].id,name:name,target_amount:target,current_amount:0,target_date:date,achieved:false});
+    toggleGoalForm(false);
+    renderSavingsGoals();
+    toast2('Savings goal created','#34d399');
+  }catch(e){toast2('Could not save goal: '+e.message.slice(0,100),'#f87171');}
+}
+
+function renderSavingsGoals(){
+  document.getElementById('goals-empty').style.display=savingsGoals.length?'none':'block';
+  var el=document.getElementById('goals-list');
+  el.innerHTML=savingsGoals.map(function(g){
+    var pct=g.target_amount>0?Math.min(g.current_amount/g.target_amount*100,100):0;
+    var remaining=Math.max(g.target_amount-g.current_amount,0);
+    var achieved=g.achieved||g.current_amount>=g.target_amount;
+    return '<div class="goal-card">'
+      +'<div class="goal-head"><div class="goal-name">🎯 '+g.name+(achieved?' <span class="goal-badge">🏆 Achieved</span>':'')+'</div>'
+      +'<button class="btn-icon btn-del" onclick="deleteGoal(\''+g.id+'\')">&#128465;</button></div>'
+      +'<div class="goal-bar-wrap"><div class="goal-bar'+(achieved?' achieved':'')+'" style="width:'+pct+'%"></div></div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px"><span class="goal-pct">'+Math.round(pct)+'% complete</span>'+(g.target_date?'<span class="goal-date">Target: '+g.target_date+'</span>':'')+'</div>'
+      +'<div class="goal-stats">'
+        +'<div><div class="goal-stat-label">Target</div><div class="goal-stat-val">'+fmt(g.target_amount)+'</div></div>'
+        +'<div><div class="goal-stat-label">Saved</div><div class="goal-stat-val" style="color:#059669">'+fmt(g.current_amount)+'</div></div>'
+        +'<div><div class="goal-stat-label">Remaining</div><div class="goal-stat-val" style="color:'+(remaining>0?'#d97706':'#059669')+'">'+fmt(remaining)+'</div></div>'
+      +'</div>'
+      +(achieved?'':'<div class="goal-actions"><button class="btn-primary" style="flex:1;justify-content:center" onclick="openContribModal(\''+g.id+'\')">+ Add Contribution</button></div>')
+    +'</div>';
+  }).join('');
+}
+
+function openContribModal(id){
+  contribGoalId=id;
+  var g=savingsGoals.find(function(x){return x.id===id;});
+  document.getElementById('contrib-goal-name').textContent='Add an amount toward "'+(g?g.name:'')+'".';
+  document.getElementById('contrib-amt').value='';
+  document.getElementById('e-contrib-amt').classList.remove('show');
+  document.getElementById('contrib-modal').classList.add('open');
+}
+function closeContribModal(){document.getElementById('contrib-modal').classList.remove('open');contribGoalId=null;}
+
+async function confirmContribution(){
+  var amtS=document.getElementById('contrib-amt').value.trim();
+  var amt=parseFloat(amtS);
+  if(!amtS||isNaN(amt)||amt<=0){document.getElementById('e-contrib-amt').classList.add('show');return;}
+  var g=savingsGoals.find(function(x){return x.id===contribGoalId;});
+  if(!g)return closeContribModal();
+  var newAmt=g.current_amount+amt;
+  var achieved=newAmt>=g.target_amount;
+  try{
+    await sbPatch('savings_goals','id=eq.'+g.id,{current_amount:newAmt,achieved:achieved});
+    g.current_amount=newAmt;g.achieved=achieved;
+    closeContribModal();
+    renderSavingsGoals();
+    toast2(achieved?'🎉 Goal achieved!':'Contribution added','#34d399');
+  }catch(e){toast2('Could not add contribution: '+e.message.slice(0,100),'#f87171');}
+}
+
+function deleteGoal(id){goalDelId=id;document.getElementById('goal-del-modal').classList.add('open');}
+function closeGoalDelModal(){document.getElementById('goal-del-modal').classList.remove('open');goalDelId=null;}
+async function confirmGoalDel(){
+  if(goalDelId!==null){
+    try{await sbDel('savings_goals','id=eq.'+goalDelId);savingsGoals=savingsGoals.filter(function(g){return g.id!==goalDelId;});renderSavingsGoals();toast2('Goal deleted','#f87171');}
+    catch(e){toast2('Could not delete goal.','#f87171');}
+  }
+  closeGoalDelModal();
+}
 
 // ── AUTO-MATCHING ──
 var patternMap = {}; // {keyword: category}
