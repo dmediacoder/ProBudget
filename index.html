@@ -295,7 +295,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f2f5;color:#111827;m
     </div>
     <div id="dash-content">
       <div class="summary-row">
-        <div class="sum-card"><div class="sum-card-label">Available Funds</div><div class="sum-card-val pos" id="d-avail">£0.00</div><div class="sum-card-sub">Total income</div></div>
+        <div class="sum-card"><div class="sum-card-label">Available Funds</div><div class="sum-card-val" id="d-avail">£0.00</div><div class="sum-card-sub" id="d-avail-sub">Total income</div></div>
         <div class="sum-card"><div class="sum-card-label">Planned Spending</div><div class="sum-card-val warn" id="d-plan">£0.00</div><div class="sum-card-sub">Budget allocated</div></div>
         <div class="sum-card"><div class="sum-card-label">Actual Spending</div><div class="sum-card-val" id="d-actual">£0.00</div><div class="sum-card-sub">Expenses recorded</div></div>
         <div class="sum-card"><div class="sum-card-label">Remaining Funds</div><div class="sum-card-val" id="d-rem">£0.00</div><div class="sum-card-sub">Available minus Actual</div></div>
@@ -512,7 +512,7 @@ async function authRefresh(refreshToken){
   var d=await r.json();if(!r.ok||d.error||!d.user)throw new Error(authErrMsg(d));return d;
 }
 
-var currentUser=null,entries=[],budget={},editId=null,delId=null,entryTab='income',savingsGoals=[],contribGoalId=null,goalDelId=null,currentPeriod=null,_resetSummaryCache=null;
+var currentUser=null,entries=[],budget={},editId=null,delId=null,entryTab='income',savingsGoals=[],contribGoalId=null,goalDelId=null,currentPeriod=null,_resetSummaryCache=null,openingBalance=0;
 function currentMonthStr(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function nextMonthStr(p){var parts=p.split('-');var y=parseInt(parts[0],10),m=parseInt(parts[1],10);m++;if(m>12){m=1;y++;}return y+'-'+String(m).padStart(2,'0');}
 function monthLabel(p){var parts=p.split('-');var y=parseInt(parts[0],10),m=parseInt(parts[1],10)-1;var d=new Date(y,m,1);return d.toLocaleString('en-GB',{month:'long',year:'numeric'});}
@@ -629,8 +629,9 @@ async function loginUser(u){
   document.getElementById('app-wrap').classList.add('show');
   await ensureBudgetUser(u);
   try{
-    var bu=await sbGet('budget_users','id=eq.'+u.id+'&select=active_period');
+    var bu=await sbGet('budget_users','id=eq.'+u.id+'&select=active_period,opening_balance');
     currentPeriod=(bu&&bu[0]&&bu[0].active_period)||currentMonthStr();
+    openingBalance=(bu&&bu[0]&&parseFloat(bu[0].opening_balance))||0;
   }catch(e){currentPeriod=currentMonthStr();}
   try{
     var dbE=await sbGet('budget_entries','user_id=eq.'+u.id+'&period=eq.'+currentPeriod+'&select=*&order=created_at.asc');
@@ -783,11 +784,12 @@ function renderDashboard(){
   document.getElementById('dash-empty').style.display=hasB?'none':'block';
   document.getElementById('dash-content').style.display=hasB?'block':'none';
   if(!hasB)return;
-  var avail=entries.filter(function(e){return e.type==='income';}).reduce(function(s,e){return s+e.amount;},0);
+  var avail=openingBalance+entries.filter(function(e){return e.type==='income';}).reduce(function(s,e){return s+e.amount;},0);
   var actual=entries.filter(function(e){return e.type==='expense';}).reduce(function(s,e){return s+e.amount;},0);
   var planned=CATS.reduce(function(s,c){return s+(budget[c]||0);},0);
   var rem=avail-actual;
-  document.getElementById('d-avail').textContent=fmt(avail);
+  var av=document.getElementById('d-avail');av.textContent=(avail<0?'-':'')+fmt(avail);av.className='sum-card-val '+(avail>=0?'pos':'neg');
+  document.getElementById('d-avail-sub').textContent=openingBalance!==0?(openingBalance>0?'Includes '+fmt(openingBalance)+' carried over':'Includes '+fmt(openingBalance)+' shortfall carried over'):'Total income';
   document.getElementById('d-plan').textContent=fmt(planned);
   document.getElementById('d-actual').textContent=fmt(actual);
   var re=document.getElementById('d-rem');re.textContent=(rem<0?'-':'')+fmt(rem);re.className='sum-card-val '+(rem>=0?'pos':'neg');
@@ -958,7 +960,8 @@ function computePeriodSummary(){
   var income=entries.filter(function(e){return e.type==='income';}).reduce(function(s,e){return s+e.amount;},0);
   var spending=entries.filter(function(e){return e.type==='expense';}).reduce(function(s,e){return s+e.amount;},0);
   var savings=entries.filter(function(e){return e.category==='Savings';}).reduce(function(s,e){return s+e.amount;},0);
-  var remaining=income-spending;
+  var avail=openingBalance+income;
+  var remaining=avail-spending;
   var breakdown=computeCategoryBreakdown();
   var top=breakdown.slice(0,3).map(function(x){return{cat:x.cat,amt:x.actual};});
   var planned=CATS.reduce(function(s,c){return s+(budget[c]||0);},0);
@@ -987,7 +990,8 @@ async function confirmResetBudget(){
   try{
     await sbPost('budget_periods',{user_id:currentUser.id,period:oldPeriod,total_income:s.income,total_spending:s.spending,total_savings:s.savings,remaining:s.remaining,top_categories:s.top,category_breakdown:s.breakdown,health_status:s.health});
     var newPeriod=nextMonthStr(oldPeriod);
-    await sbPatch('budget_users','id=eq.'+currentUser.id,{active_period:newPeriod});
+    await sbPatch('budget_users','id=eq.'+currentUser.id,{active_period:newPeriod,opening_balance:s.remaining});
+    openingBalance=s.remaining;
     var oldBudget=Object.assign({},budget);
     for(var i=0;i<CATS.length;i++){
       var cat=CATS[i];
